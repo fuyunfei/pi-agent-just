@@ -1,98 +1,123 @@
-# just-bash website at https://justbash.dev/
+# pi-agent-just
 
-This is an interactive demo of **just-bash** running entirely in your browser, with an AI agent that can explore the source code.
+Browser-based AI coding agent sandbox. Terminal on the left, code studio on the right.
+
+Built on [just-bash](https://github.com/vercel-labs/just-bash) for secure sandboxed execution and [pi-coding-agent](https://github.com/niclas-niclas/pi-coding-agent) for the AI agent runtime.
 
 ## Architecture
 
 ```
-+----------------------------------------------------------+
-|                        BROWSER                           |
-|  +----------+    +----------+    +----------------+      |
-|  | xterm.js |--->| just-bash|--->| Virtual FS     |      |
-|  | Terminal |    | (browser)|    | (in-memory)    |      |
-|  +----------+    +----------+    +----------------+      |
-|       |                                                  |
-|       | `agent` command                                  |
-|       v                                                  |
-|  +--------------------------------------------------+   |
-|  |          SSE Stream (Server-Sent Events)         |   |
-|  +--------------------------------------------------+   |
-+----------------------------|-----------------------------+
-                             |
-                             v
-+----------------------------------------------------------+
-|                        SERVER                            |
-|  +-------------+    +----------+    +----------------+   |
-|  |ToolLoopAgent|--->| bash-tool|--->| just-bash      |   |
-|  | (AI SDK)    |    |          |    | + OverlayFS    |   |
-|  |Claude Haiku |    | - bash   |    |                |   |
-|  +-------------+    | - read   |    | Real files:    |   |
-|                     | - write  |    | - just-bash/   |   |
-|                     +----------+    | - bash-tool/   |   |
-|                                     +----------------+   |
-+----------------------------------------------------------+
+┌────────────────────┬──────────────────────────────────────┐
+│                    │  [◨]  4 files          [Apply][Reset] │
+│                    ├──[index.ts]──[App.tsx]──[preview]─────┤
+│  Terminal          │┌────────┬────────────────────────────┐│
+│  (AI chat + bash)  ││ src/   │  1│ import { useState }    ││
+│                    ││  index │  2│ from "react";          ││
+│                    ││  App   │  3│                        ││
+│                    ││        │  4│ export default ...     ││
+│                    │└────────┴────────────────────────────┘│
+└────────────────────┴──────────────────────────────────────┘
 ```
 
-## Components
+**Left panel** — Terminal with AI agent. Chat naturally or run bash commands directly. Commands execute in a sandboxed virtual filesystem.
 
-### 1. just-bash (Browser)
-- Pure TypeScript bash interpreter
-- Runs locally in browser for regular commands
-- In-memory virtual filesystem with pre-loaded files
-- No network calls for basic commands like `ls`, `cat`, `grep`
+**Right panel** — Code Studio. Tabbed file viewer with Shiki syntax highlighting, live HTML preview, markdown rendering, JSON formatting. File tree sidebar with change indicators.
 
-### 2. xterm.js (Browser Terminal)
-- Renders a real terminal in the browser
-- Handles keyboard input, cursor, colors, scrolling
-- Supports ANSI escape codes for styling
+**Sandbox** — All file operations happen in an in-memory OverlayFS. Nothing touches disk until you click **Apply**. Click **Reset** to discard everything.
 
-### 3. `agent` Command
-- Custom command that calls the server
-- Sends conversation history to `/api/agent`
-- Streams response via Server-Sent Events (SSE)
-- Displays tool calls (bash commands, file reads) in real-time
-
-### 4. ToolLoopAgent (Server - AI SDK)
-- Uses Anthropic's Claude Haiku model
-- Loops automatically: think -> tool call -> observe -> think -> ...
-- Stops after 20 tool calls or when done
-- Streams responses back to browser
-
-### 5. bash-tool (Server)
-- Provides tools for the AI agent:
-  - `bash` - Execute bash commands
-  - `readFile` - Read file contents
-  - `writeFile` - Write files (disabled in this demo)
-- Integrates with just-bash sandbox
-
-### 6. OverlayFS (Server)
-- Overlays real filesystem (this source code) as read-only
-- Agent can explore just-bash and bash-tool source
-- Writes go to memory, not disk
-
-## Data Flow
-
-1. You type `agent "how does grep work?"`
-2. Browser just-bash runs the `agent` command
-3. Command POSTs to `/api/agent` with message history
-4. Server creates ToolLoopAgent with bash-tool
-5. Agent thinks, calls tools (bash, readFile), observes results
-6. Each step streams back as SSE events
-7. Browser displays tool calls and final response
-8. Response added to conversation history for multi-turn chat
-
-## Development
+## Quick Start
 
 ```bash
+# Install dependencies
 pnpm install
+
+# Set API key (pick one)
+export ANTHROPIC_API_KEY=sk-ant-...
+# or
+export OPENROUTER_API_KEY=sk-or-...
+
+# Optional: point to a real project directory
+export SANDBOX_ROOT=/path/to/your/project
+
+# Start dev server
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the terminal.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Links
+## How It Works
 
-- **just-bash**: https://github.com/vercel-labs/just-bash
-- **bash-tool**: https://github.com/vercel-labs/bash-tool
-- **AI SDK**: https://ai-sdk.dev
-- **xterm.js**: https://xtermjs.org
+### Agent API (`/api/agent`)
+
+POST endpoint that streams SSE events from the AI agent. The agent has access to sandboxed tools:
+
+| Tool | Description |
+|------|-------------|
+| `bash` | Run commands in the virtual bash environment |
+| `read` | Read files from the overlay filesystem |
+| `write` | Create/overwrite files (in-memory) |
+| `edit` | Edit existing files with string replacement |
+| `ls` | List directory contents |
+
+### Sandbox API (`/api/sandbox`)
+
+| Method | Description |
+|--------|-------------|
+| `GET /api/sandbox` | List all overlay changes (created/modified/deleted files) |
+| `POST /api/sandbox` `{action:"apply"}` | Write all changes to disk |
+| `POST /api/sandbox` `{action:"reset"}` | Discard all in-memory changes |
+
+### Code Studio
+
+- **Syntax highlighting** — Shiki with github-dark/github-light themes, 15+ languages
+- **Live preview** — HTML (sandboxed iframe), Markdown, SVG, JSON
+- **File tree** — Auto-collapsing single-child directories, change type indicators (+/~/-)
+- **Tabs** — Middle-click close, Cmd+W close, Cmd+[ / Cmd+] cycle, Cmd+B toggle sidebar
+- **Draggable splitter** — Resize terminal and studio panels
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | — | Anthropic API key |
+| `OPENROUTER_API_KEY` | — | OpenRouter API key (takes priority) |
+| `PI_MODEL` | `claude-haiku-4.5` | Model ID |
+| `SANDBOX_ROOT` | bundled `_agent-data/` | Directory to mount as the sandbox root |
+
+## Custom just-bash Extensions
+
+This project depends on a forked/extended version of `just-bash` (>= 2.11.6, not yet published to npm). We added change-tracking and apply/reset APIs to `OverlayFs` that the upstream `2.11.5` release does not have:
+
+| Method | Purpose |
+|--------|---------|
+| `getOverlayChanges()` | List all in-memory file changes (created/modified/deleted) — powers the file tree and code viewer |
+| `resetOverlay()` | Discard all in-memory writes, revert to real disk state — **Reset** button |
+| `applyChange(path)` | Write a single file's in-memory content to real disk |
+| `applyAllChanges()` | Write all changes to disk — **Apply** button |
+| `snapshotBootstrap()` | Exclude Bash init files (`/bin/`, `/dev/`, etc.) from the change list |
+| `OverlayChange` type | `{ path: string, type: "created" \| "modified" \| "deleted", content?: string }` |
+
+Without these methods, the Sandbox API (`/api/sandbox`) cannot function and the Code Studio panel would have no data.
+
+**To install locally** (until the upstream publishes these changes):
+
+```bash
+# In the just-bash repo
+pnpm pack --pack-destination /tmp/
+
+# In this repo
+pnpm add file:/tmp/just-bash-2.11.6.tgz
+```
+
+## Tech Stack
+
+- **Next.js 16** (App Router, Turbopack)
+- **just-bash** — TypeScript bash interpreter + OverlayFS
+- **pi-coding-agent** — AI agent session with tool use
+- **Shiki 4** — Syntax highlighting (browser bundle, no WASM)
+- **Tailwind CSS 4** — Styling with CSS custom properties for theming
+- **React 19** — UI
+
+## License
+
+Apache-2.0
