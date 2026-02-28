@@ -6,8 +6,9 @@
  */
 
 import { Bash, OverlayFs } from "just-bash";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { mkdtempSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 import {
 	AgentSession,
 	AuthStorage,
@@ -29,28 +30,28 @@ import {
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SANDBOX_ROOT = process.env.SANDBOX_ROOT || join(__dirname, "./_agent-data");
+// Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
+const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
-const SYSTEM_PROMPT = `You are an expert on just-bash, a TypeScript bash interpreter with an in-memory virtual filesystem.
+const SYSTEM_PROMPT = `You are an AI coding assistant in a browser-based sandbox playground.
 
-You have access to a sandboxed environment with the full source code of:
-- just-bash/ - The main bash interpreter
-- bash-tool/ - AI SDK tool for bash
-
-Refer to the README.md of the projects to answer questions about just-bash and bash-tool
-themselves which is your main focus. Never talk about this demo implementation unless asked explicitly.
-
-Use the sandbox to explore the source code, demonstrate commands, and help users understand:
-- How to use just-bash and bash-tool
-- Bash scripting in general
-- The implementation details of just-bash
+You have a fully sandboxed in-memory filesystem. All files you create exist only in memory — the user can view them in the Code Studio panel and download when ready.
 
 Available tools: bash, read, write, edit, ls.
-Use bash to run commands. Use read to view files.
-You can create and modify files — writes stay in an in-memory overlay (safe sandbox).
 
-Keep responses concise. You do not have access to pnpm, npm, or node.`;
+What you can do:
+- Create complete projects (HTML, CSS, JS, TypeScript, Python scripts, etc.)
+- Write and edit files using the write/edit tools
+- Run bash commands to explore, test, or process files
+- Generate multi-file projects from scratch
+
+Guidelines:
+- When asked to build something, create the files directly — don't just describe them
+- For web projects, create an index.html that works standalone (inline CSS/JS or separate files)
+- Keep responses concise — let the code speak for itself
+- The user sees files appear in real-time in the Code Studio panel
+
+You do NOT have access to: npm, node, pnpm, pip, or any package manager. Create self-contained projects.`;
 
 // ---------------------------------------------------------------------------
 // just-bash → pi-coding-agent adapters
@@ -224,6 +225,12 @@ export function getOrCreateSingleton() {
 	});
 
 	singleton = { session, overlayFs };
-	console.log(`[agent] Session singleton created (root: ${SANDBOX_ROOT})`);
+	console.log(`[agent] Session singleton created (pure in-memory sandbox)`);
 	return singleton;
+}
+
+/** Destroy the current session — next getOrCreateSingleton() creates a fresh one. */
+export function resetSingleton() {
+	singleton = null;
+	console.log("[agent] Session singleton reset");
 }

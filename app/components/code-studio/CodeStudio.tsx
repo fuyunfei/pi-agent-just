@@ -77,9 +77,9 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 	}, [dispatch, activeTabId, tabs]);
 
 	const wrappedAction = useCallback(
-		async (action: "apply" | "reset") => {
+		async (action: "download" | "clear") => {
 			await handleAction(action);
-			if (action === "reset") {
+			if (action === "clear") {
 				dispatch({ type: "CLOSE_ALL_TABS" });
 			}
 		},

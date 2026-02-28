@@ -8,27 +8,20 @@ export function StudioToolbar({
 	onAction,
 }: {
 	loading: boolean;
-	onAction: (action: "apply" | "reset") => void;
+	onAction: (action: "download" | "clear") => void;
 }) {
 	const { changes, sidebarOpen } = useStudioState();
 	const dispatch = useStudioDispatch();
-	const [confirmReset, setConfirmReset] = useState(false);
-	const [showApplied, setShowApplied] = useState(false);
+	const [confirmClear, setConfirmClear] = useState(false);
 
-	const handleReset = () => {
-		if (!confirmReset) {
-			setConfirmReset(true);
-			setTimeout(() => setConfirmReset(false), 3000);
+	const handleClear = () => {
+		if (!confirmClear) {
+			setConfirmClear(true);
+			setTimeout(() => setConfirmClear(false), 3000);
 			return;
 		}
-		setConfirmReset(false);
-		onAction("reset");
-	};
-
-	const handleApply = async () => {
-		onAction("apply");
-		setShowApplied(true);
-		setTimeout(() => setShowApplied(false), 2000);
+		setConfirmClear(false);
+		onAction("clear");
 	};
 
 	return (
@@ -51,30 +44,24 @@ export function StudioToolbar({
 
 			<div className="flex-1" />
 
-			{showApplied && (
-				<span className="text-green-400 text-xs font-medium">
-					{"\u2713"} Applied
-				</span>
-			)}
-
 			{changes.length > 0 && (
 				<div className="flex items-center gap-1.5">
 					<button
 						type="button"
-						onClick={handleApply}
+						onClick={() => onAction("download")}
 						disabled={loading}
 						className="px-3 h-7 text-xs font-medium rounded-md bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition-colors"
 					>
-						Apply
+						Download
 					</button>
 					<button
 						type="button"
-						onClick={handleReset}
+						onClick={handleClear}
 						disabled={loading}
 						className={`px-3 h-7 text-xs rounded-md border transition-colors disabled:opacity-50
-							${confirmReset ? "border-red-500/50 text-red-400 bg-red-500/10 hover:bg-red-500/20" : "studio-border studio-text-secondary hover:bg-[var(--studio-hover)]"}`}
+							${confirmClear ? "border-red-500/50 text-red-400 bg-red-500/10 hover:bg-red-500/20" : "studio-border studio-text-secondary hover:bg-[var(--studio-hover)]"}`}
 					>
-						{confirmReset ? "Confirm?" : "Reset"}
+						{confirmClear ? "Confirm?" : "Clear"}
 					</button>
 				</div>
 			)}

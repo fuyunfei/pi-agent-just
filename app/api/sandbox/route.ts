@@ -1,11 +1,11 @@
 /**
- * Sandbox API — overlay change inspection, apply, and reset.
+ * Sandbox API — list in-memory files, clear session.
  *
- * GET  /api/sandbox → list overlay changes
- * POST /api/sandbox → { action: "apply" | "reset" }
+ * GET  /api/sandbox → list all files in the sandbox
+ * POST /api/sandbox → { action: "clear" }  — reset sandbox to empty
  */
 
-import { getOrCreateSingleton } from "../agent/singleton";
+import { getOrCreateSingleton, resetSingleton } from "../agent/singleton";
 
 // System paths created by Bash constructor — not user project files
 const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
@@ -29,15 +29,9 @@ export async function GET() {
 export async function POST(req: Request) {
 	try {
 		const { action } = await req.json();
-		const { overlayFs } = getOrCreateSingleton();
 
-		if (action === "apply") {
-			const applied = await overlayFs.applyAllChanges();
-			return Response.json({ ok: true, applied: applied.length });
-		}
-
-		if (action === "reset") {
-			overlayFs.resetOverlay();
+		if (action === "clear") {
+			resetSingleton();
 			return Response.json({ ok: true });
 		}
 
