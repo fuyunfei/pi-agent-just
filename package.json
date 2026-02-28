@@ -1,0 +1,36 @@
+{
+  "name": "website",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "generate": "node scripts/generate-terminal-content.mjs",
+    "fetch-agent-data": "node scripts/fetch-agent-data.mjs",
+    "dev": "pnpm generate && next dev",
+    "build": "pnpm generate && pnpm fetch-agent-data && next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.55.3",
+    "@mariozechner/pi-ai": "^0.55.3",
+    "@mariozechner/pi-coding-agent": "^0.55.3",
+    "@vercel/analytics": "^1.6.1",
+    "geist": "^1.5.1",
+    "just-bash": "^2.11.6",
+    "next": "16.2.0-canary.26",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "shiki": "^4.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "fast-check": "^4.5.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,280 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --dim: #666666;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --foreground: #ffffff;
+    --dim: #999999;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-mono), "Geist Mono", "SF Mono", Menlo, monospace;
+  overflow-x: hidden;
+}
+
+noscript pre {
+  padding: 20px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 80ch;
+  margin: 0 auto;
+}
+
+/* Lite Terminal styles */
+.lite-terminal-input {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  outline: none;
+  overflow: hidden;
+  white-space: nowrap;
+  z-index: -1;
+}
+
+.lite-terminal {
+  font-family: var(--font-geist-mono), "Geist Mono", "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  position: relative;
+  outline: none;
+  min-height: 100dvh;
+  max-width: 100%;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(50vh + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: break-word;
+}
+
+/* When inside a flex container, let terminal fill available space instead of forcing 100dvh */
+.terminal-flex-container .lite-terminal {
+  min-height: auto;
+  padding-bottom: 200px;
+}
+
+.lite-terminal-output {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+}
+
+.lite-terminal-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 1.2em;
+}
+
+.lite-terminal-cursor {
+  display: inline-block;
+  vertical-align: text-bottom;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.lite-terminal-cursor.blink {
+  animation: lite-terminal-blink 1s step-end infinite;
+}
+
+@keyframes lite-terminal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Lite Terminal text styles */
+.lite-terminal .bold { font-weight: bold; }
+.lite-terminal .dim { opacity: 0.6; }
+.lite-terminal .italic { font-style: italic; }
+.lite-terminal .underline { text-decoration: underline; }
+
+/* Lite Terminal standard colors */
+.lite-terminal .black { color: var(--term-black, #000); }
+.lite-terminal .red { color: var(--term-red, #cd0000); }
+.lite-terminal .green { color: var(--term-green, #00cd00); }
+.lite-terminal .yellow { color: var(--term-yellow, #cdcd00); }
+.lite-terminal .blue { color: var(--term-blue, #0000cd); }
+.lite-terminal .magenta { color: var(--term-magenta, #cd00cd); }
+.lite-terminal .cyan { color: var(--term-cyan); }
+.lite-terminal .white { color: var(--term-white, #e5e5e5); }
+
+/* Lite Terminal bright colors */
+.lite-terminal .brightBlack { color: var(--term-brightBlack); }
+.lite-terminal .brightRed { color: var(--term-brightRed, #ff0000); }
+.lite-terminal .brightGreen { color: var(--term-brightGreen, #00ff00); }
+.lite-terminal .brightYellow { color: var(--term-brightYellow, #ffff00); }
+.lite-terminal .brightBlue { color: var(--term-brightBlue, #0000ff); }
+.lite-terminal .brightMagenta { color: var(--term-brightMagenta, #ff00ff); }
+.lite-terminal .brightCyan { color: var(--term-brightCyan); }
+.lite-terminal .brightWhite { color: var(--term-brightWhite, #fff); }
+
+/* ═══════════════════════════════════════
+   Code Studio — theme-aware variables
+   ═══════════════════════════════════════ */
+:root {
+  --studio-bg: #fafafa;
+  --studio-surface: #ffffff;
+  --studio-border: #e4e4e7;
+  --studio-text: #18181b;
+  --studio-text-secondary: #71717a;
+  --studio-dim: #a1a1aa;
+  --studio-hover: rgba(0, 0, 0, 0.05);
+  --studio-selected: rgba(14, 165, 233, 0.10);
+  --studio-tab-active: rgba(0, 0, 0, 0.06);
+  --studio-tab-inactive-hover: rgba(0, 0, 0, 0.03);
+  --studio-line-num: #c4c4c4;
+  --studio-gutter-border: #ebebeb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --studio-bg: #09090b;
+    --studio-surface: #09090b;
+    --studio-border: #27272a;
+    --studio-text: #e4e4e7;
+    --studio-text-secondary: #a1a1aa;
+    --studio-dim: #71717a;
+    --studio-hover: rgba(255, 255, 255, 0.05);
+    --studio-selected: rgba(14, 165, 233, 0.12);
+    --studio-tab-active: rgba(255, 255, 255, 0.06);
+    --studio-tab-inactive-hover: rgba(255, 255, 255, 0.03);
+    --studio-line-num: #52525b;
+    --studio-gutter-border: #1e1e22;
+  }
+}
+
+/* Studio utility classes */
+.studio-surface { background: var(--studio-surface); color: var(--studio-text); }
+.studio-text { color: var(--studio-text); }
+.studio-text-secondary { color: var(--studio-text-secondary); }
+.studio-dim { color: var(--studio-dim); }
+.studio-border { border-color: var(--studio-border); }
+.studio-border-l { border-left: 1px solid var(--studio-border); }
+.studio-border-r { border-right: 1px solid var(--studio-border); }
+.studio-border-b { border-bottom: 1px solid var(--studio-border); }
+.studio-hover:hover { background: var(--studio-hover); }
+.studio-item-selected { background: var(--studio-selected); }
+.studio-item-hover:hover { background: var(--studio-hover); }
+.studio-tab-active { background: var(--studio-tab-active); }
+.studio-tab-inactive:hover { background: var(--studio-tab-inactive-hover); }
+
+/* Studio scrollbar hiding */
+.studio-tabbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.studio-tabbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Splitter handle between terminal and studio */
+.splitter-handle {
+  width: 9px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+.splitter-line {
+  width: 1px;
+  background: var(--studio-border);
+  transition: background 0.15s, width 0.15s;
+}
+.splitter-handle:hover .splitter-line {
+  width: 3px;
+  border-radius: 2px;
+}
+.splitter-handle:active .splitter-line {
+  width: 3px;
+  background: rgba(14, 165, 233, 0.7);
+  border-radius: 2px;
+}
+
+/* Studio code viewer */
+.studio-code pre {
+  margin: 0;
+  padding: 16px !important;
+  background: transparent !important;
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 4;
+}
+
+.studio-code code {
+  font-family: var(--font-geist-mono), "Geist Mono", "SF Mono", Menlo, monospace;
+}
+
+/* Studio line numbers */
+.studio-line-numbers {
+  padding: 16px 0;
+  padding-right: 12px;
+  padding-left: 16px;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--studio-line-num);
+  user-select: none;
+  flex-shrink: 0;
+  font-family: var(--font-geist-mono), "Geist Mono", "SF Mono", Menlo, monospace;
+  border-right: 1px solid var(--studio-gutter-border);
+}
+
+/* Studio markdown preview */
+.studio-markdown {
+  color: var(--studio-text);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.studio-markdown h1 { font-size: 1.5em; font-weight: 700; margin: 0.5em 0; }
+.studio-markdown h2 { font-size: 1.3em; font-weight: 600; margin: 0.5em 0; }
+.studio-markdown h3 { font-size: 1.1em; font-weight: 600; margin: 0.5em 0; }
+.studio-markdown code {
+  background: var(--studio-hover);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: var(--font-geist-mono), "Geist Mono", "SF Mono", Menlo, monospace;
+}
+.studio-markdown pre code {
+  display: block;
+  padding: 12px;
+  overflow-x: auto;
+}
+.studio-markdown a { color: #0ea5e9; text-decoration: underline; }
+.studio-markdown li { margin-left: 1.5em; list-style: disc; }
+.studio-markdown strong { font-weight: 600; }
+.studio-markdown em { font-style: italic; }
