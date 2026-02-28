@@ -1,29 +1,29 @@
 # pi-agent-just
 
-Browser-based AI coding agent sandbox. Terminal on the left, code studio on the right.
+Browser-based AI coding playground. AI creates files in a sandboxed virtual filesystem — you browse, preview, and download.
 
 Built on [just-bash](https://github.com/vercel-labs/just-bash) for secure sandboxed execution and [pi-coding-agent](https://github.com/niclas-niclas/pi-coding-agent) for the AI agent runtime.
 
 ## Architecture
 
 ```
-┌────────────────────┬──────────────────────────────────────┐
-│                    │  [◨]  4 files          [Apply][Reset] │
-│                    ├──[index.ts]──[App.tsx]──[preview]─────┤
-│  Terminal          │┌────────┬────────────────────────────┐│
-│  (AI chat + bash)  ││ src/   │  1│ import { useState }    ││
-│                    ││  index │  2│ from "react";          ││
-│                    ││  App   │  3│                        ││
-│                    ││        │  4│ export default ...     ││
-│                    │└────────┴────────────────────────────┘│
-└────────────────────┴──────────────────────────────────────┘
+┌──────────────────────────────────────┬────────────────────┐
+│  [◨]  4 files        [Download][Clear] │                    │
+├──[index.ts]──[App.tsx]──[preview]─────┤                    │
+│┌────────┬────────────────────────────┐│  Terminal          │
+││ src/   │  1│ import { useState }    ││  (AI chat + bash)  │
+││  index │  2│ from "react";          ││                    │
+││  App   │  3│                        ││                    │
+││        │  4│ export default ...     ││                    │
+│└────────┴────────────────────────────┘│                    │
+└──────────────────────────────────────┴────────────────────┘
 ```
 
-**Left panel** — Terminal with AI agent. Chat naturally or run bash commands directly. Commands execute in a sandboxed virtual filesystem.
+**Left panel** — Code Studio. Tabbed file viewer with Shiki syntax highlighting, live HTML preview, markdown rendering, JSON formatting. File tree sidebar with change indicators.
 
-**Right panel** — Code Studio. Tabbed file viewer with Shiki syntax highlighting, live HTML preview, markdown rendering, JSON formatting. File tree sidebar with change indicators.
+**Right panel** — Terminal with AI agent. Chat naturally or run bash commands directly. Commands execute in a sandboxed virtual filesystem.
 
-**Sandbox** — All file operations happen in an in-memory OverlayFS. Nothing touches disk until you click **Apply**. Click **Reset** to discard everything.
+**Sandbox** — All file operations happen in a pure in-memory OverlayFS. Click **Download** to export files as a ZIP. Click **Clear** to reset the session.
 
 ## Quick Start
 
@@ -31,19 +31,14 @@ Built on [just-bash](https://github.com/vercel-labs/just-bash) for secure sandbo
 # Install dependencies
 pnpm install
 
-# Set API key (pick one)
-export ANTHROPIC_API_KEY=sk-ant-...
+# Set API key in .env.local
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
 # or
-export OPENROUTER_API_KEY=sk-or-...
-
-# Optional: point to a real project directory
-export SANDBOX_ROOT=/path/to/your/project
+echo "OPENROUTER_API_KEY=sk-or-..." > .env.local
 
 # Start dev server
 pnpm dev
 ```
-
-Open [http://localhost:3000](http://localhost:3000).
 
 ## How It Works
 
@@ -64,8 +59,7 @@ POST endpoint that streams SSE events from the AI agent. The agent has access to
 | Method | Description |
 |--------|-------------|
 | `GET /api/sandbox` | List all overlay changes (created/modified/deleted files) |
-| `POST /api/sandbox` `{action:"apply"}` | Write all changes to disk |
-| `POST /api/sandbox` `{action:"reset"}` | Discard all in-memory changes |
+| `POST /api/sandbox` `{action:"clear"}` | Reset the session (destroy sandbox + agent state) |
 
 ### Code Studio
 
@@ -73,7 +67,8 @@ POST endpoint that streams SSE events from the AI agent. The agent has access to
 - **Live preview** — HTML (sandboxed iframe), Markdown, SVG, JSON
 - **File tree** — Auto-collapsing single-child directories, change type indicators (+/~/-)
 - **Tabs** — Middle-click close, Cmd+W close, Cmd+[ / Cmd+] cycle, Cmd+B toggle sidebar
-- **Draggable splitter** — Resize terminal and studio panels
+- **Draggable splitter** — Resize studio and terminal panels
+- **Download** — Export all files as ZIP (browser-side, no server dependency)
 
 ## Environment Variables
 
@@ -82,32 +77,6 @@ POST endpoint that streams SSE events from the AI agent. The agent has access to
 | `ANTHROPIC_API_KEY` | — | Anthropic API key |
 | `OPENROUTER_API_KEY` | — | OpenRouter API key (takes priority) |
 | `PI_MODEL` | `claude-haiku-4.5` | Model ID |
-| `SANDBOX_ROOT` | bundled `_agent-data/` | Directory to mount as the sandbox root |
-
-## Custom just-bash Extensions
-
-This project depends on a forked/extended version of `just-bash` (>= 2.11.6, not yet published to npm). We added change-tracking and apply/reset APIs to `OverlayFs` that the upstream `2.11.5` release does not have:
-
-| Method | Purpose |
-|--------|---------|
-| `getOverlayChanges()` | List all in-memory file changes (created/modified/deleted) — powers the file tree and code viewer |
-| `resetOverlay()` | Discard all in-memory writes, revert to real disk state — **Reset** button |
-| `applyChange(path)` | Write a single file's in-memory content to real disk |
-| `applyAllChanges()` | Write all changes to disk — **Apply** button |
-| `snapshotBootstrap()` | Exclude Bash init files (`/bin/`, `/dev/`, etc.) from the change list |
-| `OverlayChange` type | `{ path: string, type: "created" \| "modified" \| "deleted", content?: string }` |
-
-Without these methods, the Sandbox API (`/api/sandbox`) cannot function and the Code Studio panel would have no data.
-
-**To install locally** (until the upstream publishes these changes):
-
-```bash
-# In the just-bash repo
-pnpm pack --pack-destination /tmp/
-
-# In this repo
-pnpm add file:/tmp/just-bash-2.11.6.tgz
-```
 
 ## Tech Stack
 

@@ -1,8 +1,6 @@
 /**
  * Singleton module — OverlayFs + Bash + AgentSession persist across requests.
- *
- * SANDBOX_ROOT env var controls which directory is mounted into the overlay.
- * Defaults to the bundled _agent-data/ directory.
+ * Uses a temporary empty directory as the overlay root (pure in-memory sandbox).
  */
 
 import { Bash, OverlayFs } from "just-bash";

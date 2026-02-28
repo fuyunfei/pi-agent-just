@@ -1,12 +1,11 @@
 {
-  "name": "website",
+  "name": "pi-agent-just",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "generate": "node scripts/generate-terminal-content.mjs",
-    "fetch-agent-data": "node scripts/fetch-agent-data.mjs",
     "dev": "pnpm generate && next dev",
-    "build": "pnpm generate && pnpm fetch-agent-data && next build",
+    "build": "pnpm generate && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -14,9 +13,8 @@
     "@mariozechner/pi-agent-core": "^0.55.3",
     "@mariozechner/pi-ai": "^0.55.3",
     "@mariozechner/pi-coding-agent": "^0.55.3",
-    "@vercel/analytics": "^1.6.1",
     "geist": "^1.5.1",
-    "just-bash": "^2.11.6",
+    "just-bash": "file:/tmp/just-bash-2.11.6.tgz",
     "next": "16.2.0-canary.26",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -29,7 +27,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "fast-check": "^4.5.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

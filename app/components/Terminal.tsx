@@ -9,15 +9,6 @@ import {
   createInputHandler,
   showWelcome,
 } from "./terminal-parts";
-import { LiteTerminal } from "./lite-terminal";
-
-async function fetchFiles(bash: Bash) {
-  const response = await fetch("/api/fs");
-  const files: Record<string, string> = await response.json();
-  for (const [path, content] of Object.entries(files)) {
-    bash.writeFile(path, content);
-  }
-}
 
 function getTheme(isDark: boolean) {
   return {
@@ -39,72 +30,67 @@ export default function TerminalComponent() {
 
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    const term = new LiteTerminal({
-      cursorBlink: true,
-      theme: getTheme(isDark),
-    });
-    term.open(container);
-
-    // Create commands
-    const { aboutCmd, installCmd, githubCmd } = createStaticCommands();
-    const agentCmd = createAgentCommand(term);
-
-    // Files from DOM
-    const files = {
-      "/home/user/README.md": getTerminalData("file-readme"),
-      "/home/user/package.json": getTerminalData("file-package-json"),
-    };
-
-    const bash = new Bash({
-      customCommands: [aboutCmd, installCmd, githubCmd, agentCmd],
-      files,
-      cwd: "/home/user",
-    });
-
-    // Set up input handling
-    const inputHandler = createInputHandler(term, bash);
-
-    // Load additional files from API into bash filesystem
-    void fetchFiles(bash);
-
-    // Track cleanup state
+    // Dynamic import to avoid SSR issues with LiteTerminal
     let disposed = false;
-
-    // Show welcome and handle ?agent= query parameter
-    requestAnimationFrame(() => {
+    import("./lite-terminal").then(({ LiteTerminal }) => {
       if (disposed) return;
 
-      showWelcome(term);
+      const term = new LiteTerminal({
+        cursorBlink: true,
+        theme: getTheme(isDark),
+      });
+      term.open(container);
 
-      // Check for ?agent= query parameter
-      const params = new URLSearchParams(window.location.search);
-      const agentQuery = params.get("agent");
+      // Create commands
+      const { aboutCmd, installCmd, githubCmd } = createStaticCommands();
+      const agentCmd = createAgentCommand(term);
 
-      if (agentQuery) {
-        // Clean the URL
-        window.history.replaceState({}, "", window.location.pathname);
-        // Execute the agent command
-        void inputHandler.executeCommand(agentQuery);
-      } else if (inputHandler.history.length === 0) {
-        // Pre-populate command if history is empty and no query param
-        inputHandler.setInitialCommand("What is just-bash?");
-      }
+      // Files from DOM
+      const files = {
+        "/home/user/README.md": getTerminalData("file-readme"),
+        "/home/user/package.json": getTerminalData("file-package-json"),
+      };
+
+      const bash = new Bash({
+        customCommands: [aboutCmd, installCmd, githubCmd, agentCmd],
+        files,
+        cwd: "/home/user",
+      });
+
+      // Set up input handling
+      const inputHandler = createInputHandler(term, bash);
+
+      // Show welcome
+      requestAnimationFrame(() => {
+        if (disposed) return;
+        showWelcome(term);
+
+        if (inputHandler.history.length === 0) {
+          inputHandler.setInitialCommand("Build me a landing page");
+        }
+      });
+
+      // Color scheme change handling
+      const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const onColorSchemeChange = (e: MediaQueryListEvent) => {
+        term.options.theme = getTheme(e.matches);
+      };
+      colorSchemeQuery.addEventListener("change", onColorSchemeChange);
+
+      term.focus();
+
+      // Store cleanup
+      cleanupRef.current = () => {
+        colorSchemeQuery.removeEventListener("change", onColorSchemeChange);
+        term.dispose();
+      };
     });
 
-    // Color scheme change handling
-    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const onColorSchemeChange = (e: MediaQueryListEvent) => {
-      term.options.theme = getTheme(e.matches);
-    };
-    colorSchemeQuery.addEventListener("change", onColorSchemeChange);
-
-    // Initial focus
-    term.focus();
+    const cleanupRef = { current: () => {} };
 
     return () => {
       disposed = true;
-      colorSchemeQuery.removeEventListener("change", onColorSchemeChange);
-      term.dispose();
+      cleanupRef.current();
     };
   }, []);
 
