@@ -136,7 +136,7 @@ function Splitter({ onDrag }: { onDrag: (deltaX: number) => void }) {
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
-  const [terminalWidth, setTerminalWidth] = useState<number | null>(null);
+  const [studioWidth, setStudioWidth] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -144,14 +144,14 @@ export default function Home() {
   }, []);
 
   const handleDrag = useCallback((deltaX: number) => {
-    setTerminalWidth((prev) => {
+    setStudioWidth((prev) => {
       const container = containerRef.current;
       if (!container) return prev;
       const total = container.offsetWidth;
-      const current = prev ?? total * 0.4;
+      const current = prev ?? total * 0.6;
       const next = current + deltaX;
-      // Clamp: min 250px, max total - 350px
-      return Math.max(250, Math.min(next, total - 350));
+      // Clamp: min 350px for studio, leave min 250px for terminal
+      return Math.max(350, Math.min(next, total - 250));
     });
   }, []);
 
@@ -166,11 +166,11 @@ export default function Home() {
         className="terminal-flex-container"
         style={{ display: "flex", flexDirection: "row", height: "100dvh", overflow: "hidden" }}
       >
-        <div style={{ width: terminalWidth ?? "40%", minWidth: 250, overflow: "auto", flexShrink: 0 }}>
+        {mounted ? <CodeStudio style={{ width: studioWidth ?? "60%", minWidth: 350, flexShrink: 0, overflow: "hidden" }} /> : null}
+        {mounted ? <Splitter onDrag={handleDrag} /> : null}
+        <div style={{ flex: 1, minWidth: 250, overflow: "auto" }}>
           {mounted ? <TerminalComponent /> : null}
         </div>
-        {mounted ? <Splitter onDrag={handleDrag} /> : null}
-        {mounted ? <CodeStudio /> : null}
       </div>
       <a href="https://vercel.com" target="_blank" hidden id="credits">
         Created by Vercel Labs

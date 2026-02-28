@@ -189,11 +189,40 @@ export function createInputHandler(term: Terminal, bash: Bash) {
     "clear",
   ];
 
+  // Calculate display width of a string (CJK chars = 2 columns, others = 1)
+  const displayWidth = (str: string): number => {
+    let w = 0;
+    for (const ch of str) {
+      const code = ch.codePointAt(0)!;
+      // CJK Unified Ideographs, CJK Compatibility, Fullwidth Forms,
+      // Hangul, Katakana/Hiragana, CJK Ext, Enclosed CJK, etc.
+      if (
+        (code >= 0x1100 && code <= 0x115f) || // Hangul Jamo
+        (code >= 0x2e80 && code <= 0x303e) || // CJK Radicals, Kangxi, CJK Symbols
+        (code >= 0x3040 && code <= 0x33bf) || // Hiragana, Katakana, CJK Compat
+        (code >= 0x3400 && code <= 0x4dbf) || // CJK Ext A
+        (code >= 0x4e00 && code <= 0xa4cf) || // CJK Unified + Yi
+        (code >= 0xac00 && code <= 0xd7af) || // Hangul Syllables
+        (code >= 0xf900 && code <= 0xfaff) || // CJK Compat Ideographs
+        (code >= 0xfe30 && code <= 0xfe6f) || // CJK Compat Forms
+        (code >= 0xff01 && code <= 0xff60) || // Fullwidth Forms
+        (code >= 0xffe0 && code <= 0xffe6) || // Fullwidth Signs
+        (code >= 0x20000 && code <= 0x2fffd) || // CJK Ext B-F
+        (code >= 0x30000 && code <= 0x3fffd)    // CJK Ext G+
+      ) {
+        w += 2;
+      } else {
+        w += 1;
+      }
+    }
+    return w;
+  };
+
   const redrawLine = () => {
     term.write("\r$ " + cmd + "\x1b[K");
-    const moveBack = cmd.length - cursorPos;
-    if (moveBack > 0) {
-      term.write(`\x1b[${moveBack}D`);
+    const tailWidth = displayWidth(cmd.slice(cursorPos));
+    if (tailWidth > 0) {
+      term.write(`\x1b[${tailWidth}D`);
     }
   };
 
@@ -270,9 +299,9 @@ export function createInputHandler(term: Terminal, bash: Bash) {
         term.writeln(matches.join("  "));
         term.write("$ " + cmd);
         // Reposition cursor
-        const moveBack = cmd.length - cursorPos;
-        if (moveBack > 0) {
-          term.write(`\x1b[${moveBack}D`);
+        const tailWidth = displayWidth(cmd.slice(cursorPos));
+        if (tailWidth > 0) {
+          term.write(`\x1b[${tailWidth}D`);
         }
       }
     }
@@ -389,9 +418,9 @@ export function createInputHandler(term: Terminal, bash: Bash) {
     if (e === "\x0c") {
       // Clear screen and scrollback, move cursor to home, then redraw prompt
       term.write("\x1b[2J\x1b[3J\x1b[H$ " + cmd + "\x1b[K");
-      const moveBack = cmd.length - cursorPos;
-      if (moveBack > 0) {
-        term.write(`\x1b[${moveBack}D`);
+      const tailWidth = displayWidth(cmd.slice(cursorPos));
+      if (tailWidth > 0) {
+        term.write(`\x1b[${tailWidth}D`);
       }
       return;
     }
@@ -508,10 +537,10 @@ export function createInputHandler(term: Terminal, bash: Bash) {
       return;
     }
 
-    // Printable characters
-    if (e >= " " && e <= "~") {
+    // Printable characters (ASCII and multibyte like CJK)
+    if (e.length > 0 && e >= " " && !e.startsWith("\x1b")) {
       cmd = cmd.slice(0, cursorPos) + e + cmd.slice(cursorPos);
-      cursorPos++;
+      cursorPos += e.length;
       redrawLine();
       return;
     }

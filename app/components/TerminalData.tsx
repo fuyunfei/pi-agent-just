@@ -5,10 +5,7 @@ import {
   CMD_INSTALL,
   CMD_GITHUB,
   FILE_README,
-  FILE_LICENSE,
   FILE_PACKAGE_JSON,
-  FILE_AGENTS_MD,
-  FILE_WTF_IS_THIS,
 } from "./terminal-content";
 
 // Valid data IDs
@@ -17,10 +14,7 @@ export type TerminalDataId =
   | "cmd-install"
   | "cmd-github"
   | "file-readme"
-  | "file-license"
-  | "file-package-json"
-  | "file-agents-md"
-  | "file-wtf-is-this";
+  | "file-package-json";
 
 // Hidden data element component
 function DataElement({ id, children }: { id: TerminalDataId; children: string }) {
@@ -42,10 +36,7 @@ export function TerminalData() {
 
       {/* File contents */}
       <DataElement id="file-readme">{FILE_README}</DataElement>
-      <DataElement id="file-license">{FILE_LICENSE}</DataElement>
       <DataElement id="file-package-json">{FILE_PACKAGE_JSON}</DataElement>
-      <DataElement id="file-agents-md">{FILE_AGENTS_MD}</DataElement>
-      <DataElement id="file-wtf-is-this">{FILE_WTF_IS_THIS}</DataElement>
     </>
   );
 }

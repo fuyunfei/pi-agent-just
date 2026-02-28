@@ -1,17 +1,11 @@
 import {
   FILE_README,
-  FILE_LICENSE,
   FILE_PACKAGE_JSON,
-  FILE_AGENTS_MD,
-  FILE_WTF_IS_THIS,
 } from "../../components/terminal-content";
 
 const FILES: Record<string, string> = {
   "README.md": FILE_README,
-  "LICENSE": FILE_LICENSE,
   "package.json": FILE_PACKAGE_JSON,
-  "AGENTS.md": FILE_AGENTS_MD,
-  "wtf-is-this.md": FILE_WTF_IS_THIS,
 };
 
 export function generateStaticParams() {

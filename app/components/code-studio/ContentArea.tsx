@@ -17,7 +17,7 @@ export function ContentArea() {
 
 	if (change?.type === "deleted") {
 		return (
-			<div className="flex items-center justify-center h-full text-red-400 text-sm italic">
+			<div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }} className="text-red-400 text-sm italic">
 				File deleted
 			</div>
 		);
@@ -28,6 +28,8 @@ export function ContentArea() {
 	}
 
 	return (
-		<CodeViewer content={content} language={getLanguageFromPath(activeTab.path)} />
+		<div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+			<CodeViewer content={content} language={getLanguageFromPath(activeTab.path)} />
+		</div>
 	);
 }

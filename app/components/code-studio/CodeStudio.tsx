@@ -12,7 +12,7 @@ import { FileTreeSidebar } from "./FileTreeSidebar";
 import { ContentArea } from "./ContentArea";
 import { useStudioChanges } from "./useStudioChanges";
 
-function StudioInner() {
+function StudioInner({ style }: { style?: React.CSSProperties }) {
 	const dispatch = useStudioDispatch();
 	const { tabs, activeTabId } = useStudioState();
 	const { changes, mountPoint, loading, handleAction } = useStudioChanges();
@@ -88,14 +88,14 @@ function StudioInner() {
 
 	return (
 		<div
-			className="flex flex-col h-dvh studio-surface overflow-hidden text-[13px] min-w-[300px]"
-			style={{ flex: 1 }}
+			className="flex flex-col studio-surface text-[13px]"
+			style={{ ...style, height: "100dvh", overflow: "hidden" }}
 		>
 			<StudioToolbar loading={loading} onAction={wrappedAction} />
 			<TabBar />
-			<div className="flex flex-1 min-h-0 overflow-hidden">
+			<div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
 				<FileTreeSidebar />
-				<div className="flex-1 min-w-0 overflow-hidden">
+				<div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 					<ContentArea />
 				</div>
 			</div>
@@ -103,10 +103,10 @@ function StudioInner() {
 	);
 }
 
-export default function CodeStudio() {
+export default function CodeStudio({ style }: { style?: React.CSSProperties }) {
 	return (
 		<StudioProvider>
-			<StudioInner />
+			<StudioInner style={style} />
 		</StudioProvider>
 	);
 }

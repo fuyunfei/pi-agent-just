@@ -7,6 +7,8 @@ function getExtension(filename: string): string {
 	return dot === -1 ? "" : filename.slice(dot + 1).toLowerCase();
 }
 
+const fill = { flex: 1, minHeight: 0, minWidth: 0 } as const;
+
 function JsonPreview({ content }: { content: string }) {
 	const formatted = useMemo(() => {
 		try {
@@ -17,51 +19,43 @@ function JsonPreview({ content }: { content: string }) {
 	}, [content]);
 
 	return (
-		<pre className="p-4 text-[13px] leading-[1.6] font-mono studio-text overflow-auto h-full whitespace-pre-wrap">
+		<pre style={{ ...fill, overflow: "auto", margin: 0, padding: 16 }} className="text-[13px] leading-[1.6] font-mono studio-text whitespace-pre-wrap">
 			{formatted}
 		</pre>
 	);
 }
 
 function MarkdownPreview({ content }: { content: string }) {
-	// Simple markdown → HTML (headings, bold, italic, code, links, lists)
 	const html = useMemo(() => {
 		let out = content
 			.replace(/&/g, "&amp;")
 			.replace(/</g, "&lt;")
 			.replace(/>/g, "&gt;");
-		// headings
 		out = out.replace(/^### (.+)$/gm, "<h3>$1</h3>");
 		out = out.replace(/^## (.+)$/gm, "<h2>$1</h2>");
 		out = out.replace(/^# (.+)$/gm, "<h1>$1</h1>");
-		// bold/italic
 		out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 		out = out.replace(/\*(.+?)\*/g, "<em>$1</em>");
-		// inline code
 		out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
-		// code blocks
 		out = out.replace(
 			/```[\s\S]*?\n([\s\S]*?)```/g,
 			"<pre><code>$1</code></pre>",
 		);
-		// links
 		out = out.replace(
 			/\[([^\]]+)\]\(([^)]+)\)/g,
 			'<a href="$2" target="_blank" rel="noopener">$1</a>',
 		);
-		// unordered lists
 		out = out.replace(/^[-*] (.+)$/gm, "<li>$1</li>");
-		// paragraphs (double newline)
 		out = out.replace(/\n\n/g, "</p><p>");
 		out = `<p>${out}</p>`;
-		// single newlines → <br> (within paragraphs)
 		out = out.replace(/([^>])\n([^<])/g, "$1<br>$2");
 		return out;
 	}, [content]);
 
 	return (
 		<div
-			className="p-6 overflow-auto h-full studio-markdown"
+			style={{ ...fill, overflow: "auto", padding: 24 }}
+			className="studio-markdown"
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);
@@ -69,9 +63,9 @@ function MarkdownPreview({ content }: { content: string }) {
 
 function SvgPreview({ content }: { content: string }) {
 	return (
-		<div className="flex items-center justify-center h-full p-8 overflow-auto studio-surface">
+		<div style={{ ...fill, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }} className="studio-surface">
 			<div
-				className="max-w-full max-h-full"
+				style={{ maxWidth: "100%", maxHeight: "100%" }}
 				dangerouslySetInnerHTML={{ __html: content }}
 			/>
 		</div>
@@ -87,8 +81,8 @@ function HtmlPreview({ content }: { content: string }) {
 		<iframe
 			srcDoc={srcdoc}
 			sandbox="allow-scripts"
-			className="w-full h-full border-0"
 			title="Preview"
+			style={{ ...fill, border: "none", display: "block" }}
 		/>
 	);
 }
@@ -115,7 +109,7 @@ export function LivePreview({
 			return <JsonPreview content={content} />;
 		default:
 			return (
-				<div className="flex items-center justify-center h-full studio-dim text-sm">
+				<div style={{ ...fill, display: "flex", alignItems: "center", justifyContent: "center" }} className="studio-dim text-sm">
 					No preview available for this file type
 				</div>
 			);

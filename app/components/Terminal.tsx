@@ -52,11 +52,7 @@ export default function TerminalComponent() {
     // Files from DOM
     const files = {
       "/home/user/README.md": getTerminalData("file-readme"),
-      "/home/user/LICENSE": getTerminalData("file-license"),
       "/home/user/package.json": getTerminalData("file-package-json"),
-      "/home/user/AGENTS.md": getTerminalData("file-agents-md"),
-      "/home/user/wtf-is-this.md": getTerminalData("file-wtf-is-this"),
-      "/home/user/dirs/are/fun/author/info.txt": "https://x.com/cramforce\n",
     };
 
     const bash = new Bash({
