@@ -3,7 +3,7 @@
  * Uses a temporary empty directory as the overlay root (pure in-memory sandbox).
  */
 
-import { Bash, OverlayFs } from "just-bash";
+import { Bash, OverlayFs, type FsSnapshot } from "just-bash";
 import { mkdtempSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -138,7 +138,9 @@ function createOverlayLsOps(fs: OverlayFs): LsOperations {
 
 let singleton: {
 	session: AgentSession;
+	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
+	fsCheckpoints: Map<string, FsSnapshot>;
 } | null = null;
 
 export function getOrCreateSingleton() {
@@ -199,7 +201,7 @@ export function getOrCreateSingleton() {
 
 	const sessionManager = SessionManager.inMemory();
 	const settingsManager = SettingsManager.inMemory({
-		compaction: { enabled: false },
+		compaction: { enabled: true },
 	});
 
 	sessionManager.appendModelChange(model.provider, model.id);
@@ -234,9 +236,25 @@ export function getOrCreateSingleton() {
 		extensionRunnerRef: {},
 	});
 
-	singleton = { session, overlayFs };
+	const fsCheckpoints = new Map<string, FsSnapshot>();
+	// Store initial checkpoint before any turns
+	fsCheckpoints.set("initial", overlayFs.snapshot());
+
+	singleton = { session, sessionManager, overlayFs, fsCheckpoints };
 	console.log(`[agent] Session singleton created (pure in-memory sandbox)`);
 	return singleton;
+}
+
+/** Return aggregated session stats + context usage. */
+export function getSessionStats() {
+	if (!singleton) return null;
+	const stats = singleton.session.getSessionStats();
+	const context = singleton.session.getContextUsage();
+	return {
+		totalTokens: stats.tokens.total,
+		cost: stats.cost,
+		contextPercent: context?.percent ?? null,
+	};
 }
 
 /** Destroy the current session — next getOrCreateSingleton() creates a fresh one. */

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import type { ChatMessage, MessagePart, ToolCall } from "./types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FileUIPart } from "@/components/ai-elements/ai-types";
+import type { ChatMessage, Checkpoint, MessagePart, ModelInfo, SessionUsage, ToolCall } from "./types";
 
 type UIMessage = {
 	id: string;
@@ -15,8 +16,27 @@ const nextId = () => `msg-${++messageId}`;
 export function useChatAgent() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [status, setStatus] = useState<"ready" | "streaming" | "error">("ready");
+	const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
+	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
+
+	// Fetch current model on mount
+	useEffect(() => {
+		fetch("/api/model")
+			.then((r) => r.json())
+			.then((data) => {
+				if (data.current) {
+					setCurrentModel({
+						provider: data.current.provider,
+						id: data.current.id,
+						label: data.current.name || data.current.id,
+						desc: "",
+					});
+				}
+			})
+			.catch(() => {});
+	}, []);
 
 	const updateLastAssistant = useCallback(
 		(updater: (msg: ChatMessage) => ChatMessage) => {
@@ -32,7 +52,7 @@ export function useChatAgent() {
 	);
 
 	const send = useCallback(
-		async (text: string) => {
+		async (text: string, files?: FileUIPart[]) => {
 			const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
 			const assistantMsg: ChatMessage = {
 				id: nextId(),
@@ -54,6 +74,39 @@ export function useChatAgent() {
 
 			const controller = new AbortController();
 			abortRef.current = controller;
+
+			// Convert image files to base64 ImageContent for API
+			const images = files
+				?.filter((f) => f.mediaType.startsWith("image/"))
+				.map((f) => ({
+					type: "image" as const,
+					data: f.url.replace(/^data:[^;]+;base64,/, ""),
+					mimeType: f.mediaType,
+				}));
+
+			// For non-image files, append content as text
+			const textFiles = files?.filter((f) => !f.mediaType.startsWith("image/"));
+			let fullPrompt = text;
+			if (textFiles?.length) {
+				const fileContents = textFiles.map((f) => {
+					try {
+						const base64 = f.url.replace(/^data:[^;]+;base64,/, "");
+						return `--- ${f.filename} ---\n${atob(base64)}`;
+					} catch {
+						return `--- ${f.filename} ---\n(binary file)`;
+					}
+				});
+				fullPrompt += "\n\n" + fileContents.join("\n\n");
+			}
+
+			// Update the history entry with the full prompt (including text file contents)
+			if (fullPrompt !== text) {
+				historyRef.current[historyRef.current.length - 1] = {
+					id: userMsg.id,
+					role: "user",
+					parts: [{ type: "text", text: fullPrompt }],
+				};
+			}
 
 			// Local mutable parts tracker (avoids closure staleness)
 			const partsTracker: MessagePart[] = [];
@@ -101,7 +154,10 @@ export function useChatAgent() {
 				const response = await fetch("/api/agent", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ messages: historyRef.current }),
+					body: JSON.stringify({
+						messages: historyRef.current,
+						images: images?.length ? images : undefined,
+					}),
 					signal: controller.signal,
 				});
 
@@ -211,6 +267,22 @@ export function useChatAgent() {
 							} else if (data.type === "error") {
 								const errorMsg = data.error || data.message || "Unknown error";
 								appendText(`\n\n**Error:** ${errorMsg}`);
+							} else if (data.type === "finish") {
+								if (data.entryId) {
+									// Tag the user message with its entryId for checkpoint rollback
+									setMessages((prev) => {
+										const userIdx = prev.findLastIndex(
+											(m) => m.role === "user" && m.id === userMsg.id,
+										);
+										if (userIdx === -1) return prev;
+										const next = [...prev];
+										next[userIdx] = { ...next[userIdx], entryId: data.entryId };
+										return next;
+									});
+								}
+								if (data.usage) {
+									setUsage(data.usage as SessionUsage);
+								}
 							}
 						} catch {
 							// skip parse errors
@@ -256,6 +328,7 @@ export function useChatAgent() {
 
 	const clear = useCallback(() => {
 		setMessages([]);
+		setUsage(null);
 		historyRef.current = [];
 		fetch("/api/sandbox", {
 			method: "POST",
@@ -266,5 +339,61 @@ export function useChatAgent() {
 		});
 	}, []);
 
-	return { messages, status, send, stop, clear };
+	const rollback = useCallback(async (entryId: string) => {
+		try {
+			const res = await fetch("/api/checkpoint", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ action: "rollback", entryId }),
+			});
+			if (!res.ok) return;
+
+			// Truncate messages — keep up to and including the rollback user message, drop everything after
+			setMessages((prev) => {
+				const idx = prev.findIndex(
+					(m) => m.role === "user" && m.entryId === entryId,
+				);
+				if (idx === -1) return prev;
+				return prev.slice(0, idx + 1);
+			});
+
+			// Truncate history ref to match (keep up to the matching user message)
+			const histIdx = historyRef.current.findIndex(
+				(m) => m.role === "user" && messages.find(
+					(cm) => cm.id === m.id && cm.entryId === entryId,
+				),
+			);
+			if (histIdx !== -1) {
+				historyRef.current = historyRef.current.slice(0, histIdx + 1);
+			}
+
+			// Notify CodeStudio to refresh files
+			window.dispatchEvent(new CustomEvent("studio:rollback"));
+		} catch {
+			// Rollback failed
+		}
+	}, [messages]);
+
+	const switchModel = useCallback(async (provider: string, modelId: string) => {
+		try {
+			const res = await fetch("/api/model", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ provider, modelId }),
+			});
+			const data = await res.json();
+			if (data.ok && data.model) {
+				setCurrentModel({
+					provider: data.model.provider,
+					id: data.model.id,
+					label: data.model.name || data.model.id,
+					desc: "",
+				});
+			}
+		} catch {
+			// Model switch failed
+		}
+	}, []);
+
+	return { messages, status, send, stop, clear, rollback, currentModel, switchModel, usage };
 }

@@ -3,7 +3,7 @@
  */
 
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { getOrCreateSingleton } from "./singleton";
+import { getOrCreateSingleton, getSessionStats } from "./singleton";
 
 // ---------------------------------------------------------------------------
 // SSE helpers
@@ -18,7 +18,7 @@ function sseEvent(data: Record<string, unknown>): string {
 // ---------------------------------------------------------------------------
 
 export async function POST(req: Request) {
-	const { messages } = await req.json();
+	const { messages, images } = await req.json();
 	const lastUserMessage = messages
 		.filter((m: { role: string }) => m.role === "user")
 		.pop();
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 		);
 	}
 
-	const { session } = ctx;
+	const { session, sessionManager, overlayFs, fsCheckpoints } = ctx;
 
 	// --- Stream SSE ---
 	const encoder = new TextEncoder();
@@ -109,9 +109,23 @@ export async function POST(req: Request) {
 					});
 				}
 
+				// Compaction events
+				if (event.type === "auto_compaction_start") {
+					enqueue({ type: "compaction-start", reason: event.reason });
+				}
+				if (event.type === "auto_compaction_end") {
+					enqueue({ type: "compaction-end", aborted: event.aborted });
+				}
+
 				// Agent finished
 				if (event.type === "agent_end") {
-					enqueue({ type: "finish", reason: "stop" });
+					// Save FS checkpoint keyed by current leaf entry
+					const leafId = sessionManager.getLeafId();
+					if (leafId) {
+						fsCheckpoints.set(leafId, overlayFs.snapshot());
+					}
+					const usage = getSessionStats();
+					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage });
 					try {
 						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 						controller.close();
@@ -123,7 +137,8 @@ export async function POST(req: Request) {
 			});
 
 			// Fire the prompt (don't await — events stream via subscribe)
-			session.prompt(promptText).catch((err) => {
+			const promptOpts = images?.length ? { images } : undefined;
+			session.prompt(promptText, promptOpts).catch((err) => {
 				enqueue({
 					type: "error",
 					error: err instanceof Error ? err.message : String(err),
