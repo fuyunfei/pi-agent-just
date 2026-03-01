@@ -30,7 +30,6 @@ import {
 	AttachmentRemove,
 } from "@/components/ai-elements/attachments";
 import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
-import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import { cn } from "@/lib/utils";
 import {
 	CheckCircle2Icon,
@@ -471,31 +470,17 @@ export function ChatPanel() {
 						onKeyDown={slashMenu.onTextareaKeyDown}
 					/>
 					<PromptInputFooter>
-						<div className="flex items-center gap-1">
-							{/* Attachment button */}
-							<PromptInputButton
-								tooltip="Attach files"
-								onClick={() => {
-									const input = document.querySelector<HTMLInputElement>(
-										'input[type="file"][aria-label="Upload files"]',
-									);
-									input?.click();
-								}}
-							>
-								<PaperclipIcon className="size-3.5" />
-							</PromptInputButton>
-
-							{/* Current model label */}
-							{currentModel && (
-								<div className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-muted-foreground">
-									<ModelSelectorLogo
-										provider={currentModel.provider as "anthropic"}
-										className="size-3"
-									/>
-									<span>{currentModel.label}</span>
-								</div>
-							)}
-						</div>
+						<PromptInputButton
+							tooltip="Attach files"
+							onClick={() => {
+								const input = document.querySelector<HTMLInputElement>(
+									'input[type="file"][aria-label="Upload files"]',
+								);
+								input?.click();
+							}}
+						>
+							<PaperclipIcon className="size-3.5" />
+						</PromptInputButton>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
 								<span>{formatTokens(usage.totalTokens)} tokens</span>
