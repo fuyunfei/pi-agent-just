@@ -7,7 +7,7 @@ import { LivePreview } from "./LivePreview";
 import { getLanguageFromPath } from "./file-icons";
 
 export function ContentArea() {
-	const { tabs, activeTabId, changes } = useStudioState();
+	const { tabs, activeTabId, changes, mountPoint } = useStudioState();
 
 	const activeTab = tabs.find((t) => t.id === activeTabId);
 	if (!activeTab) return <EmptyState />;
@@ -24,7 +24,7 @@ export function ContentArea() {
 	}
 
 	if (activeTab.mode === "preview") {
-		return <LivePreview content={content} filename={activeTab.name} />;
+		return <LivePreview content={content} filename={activeTab.name} changes={changes} mountPoint={mountPoint} />;
 	}
 
 	return (

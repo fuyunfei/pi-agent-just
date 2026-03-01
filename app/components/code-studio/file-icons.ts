@@ -74,7 +74,11 @@ export function isPreviewable(path: string): boolean {
 		ext === "md" ||
 		ext === "mdx" ||
 		ext === "svg" ||
-		ext === "json"
+		ext === "json" ||
+		ext === "tsx" ||
+		ext === "jsx" ||
+		ext === "ts" ||
+		ext === "js"
 	);
 }
 
@@ -87,6 +91,8 @@ export function shouldDefaultPreview(path: string): boolean {
 		ext === "svg" ||
 		ext === "md" ||
 		ext === "mdx" ||
-		ext === "json"
+		ext === "json" ||
+		ext === "tsx" ||
+		ext === "jsx"
 	);
 }
