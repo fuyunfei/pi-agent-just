@@ -56,6 +56,7 @@ import {
 	XCircleIcon,
 } from "lucide-react";
 import { useChatAgent } from "./useChatAgent";
+import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
 import type { ChatMessage, ModelInfo, ToolCall } from "./types";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
 
@@ -357,12 +358,15 @@ export function ChatPanel() {
 	const { messages, status, send, stop, rollback, currentModel, switchModel, usage } = useChatAgent();
 	const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
 
+	const slashMenu = useSlashCommandMenu(send);
+
 	const handleSubmit = useCallback(
 		({ text, files }: { text: string; files?: FileUIPart[] }) => {
 			if (!text.trim()) return;
+			slashMenu.setQuery("");
 			send(text.trim(), files?.length ? files : undefined);
 		},
-		[send],
+		[send, slashMenu],
 	);
 
 	const chatStatus =
@@ -454,7 +458,13 @@ export function ChatPanel() {
 			</Conversation>
 
 			{/* Input area */}
-			<div className="border-t border-border/50 p-3">
+			<div className="relative border-t border-border/50 p-3">
+				<SlashCommandMenu
+					filtered={slashMenu.filtered}
+					selectedIndex={slashMenu.selectedIndex}
+					onSelect={slashMenu.select}
+					visible={slashMenu.visible}
+				/>
 				<PromptInput
 					onSubmit={handleSubmit}
 					className="max-w-full"
@@ -462,8 +472,10 @@ export function ChatPanel() {
 				>
 					<AttachmentPreviews />
 					<PromptInputTextarea
-						placeholder="Describe what you want to build..."
+						placeholder="Describe what you want to build... (/ for commands)"
 						disabled={status === "streaming"}
+						onChange={slashMenu.onTextareaChange}
+						onKeyDown={slashMenu.onTextareaKeyDown}
 					/>
 					<PromptInputFooter>
 						<div className="flex items-center gap-1">
