@@ -1,12 +1,14 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { TreeNode } from "./types";
 import { getFileIcon } from "./file-icons";
 
 const TYPE_STYLES = {
-	created: { symbol: "+", color: "#22c55e" },
-	modified: { symbol: "~", color: "#eab308" },
-	deleted: { symbol: "-", color: "#ef4444" },
+	created: { symbol: "+", className: "text-green-500" },
+	modified: { symbol: "~", className: "text-yellow-500" },
+	deleted: { symbol: "-", className: "text-red-500" },
 } as const;
 
 export function FileTreeNode({
@@ -28,6 +30,7 @@ export function FileTreeNode({
 	const isCollapsed = collapsed.has(node.fullPath);
 	const isSelected = selectedPath === node.change?.path;
 	const style = node.change ? TYPE_STYLES[node.change.type] : null;
+	const FileIcon = getFileIcon(node.name);
 
 	return (
 		<>
@@ -39,34 +42,35 @@ export function FileTreeNode({
 						onSelect(node.change.path, node.name);
 					}
 				}}
-				className={`flex items-center gap-1.5 cursor-pointer select-none transition-colors duration-75
-					${isSelected ? "studio-item-selected" : "studio-item-hover"}`}
+				className={cn(
+					"flex items-center gap-1.5 cursor-pointer select-none transition-colors duration-75",
+					isSelected ? "bg-accent" : "hover:bg-muted/50",
+				)}
 				style={{ padding: `4px 12px 4px ${12 + depth * 16}px` }}
 			>
 				{isDir ? (
-					<span className={`w-4 text-center text-[9px] flex-shrink-0 studio-dim transition-transform duration-100 ${isCollapsed ? "" : "rotate-90"}`}>
-						{"\u25B6"}
-					</span>
+					<ChevronRight
+						className={cn(
+							"size-3.5 flex-shrink-0 text-muted-foreground transition-transform duration-100",
+							!isCollapsed && "rotate-90",
+						)}
+					/>
 				) : (
-					<span
-						className="w-4 text-center text-[10px] font-mono flex-shrink-0 opacity-60"
-						style={{ color: style?.color }}
-					>
-						{getFileIcon(node.name)}
-					</span>
+					<FileIcon
+						className={cn("size-3.5 flex-shrink-0 opacity-60", style?.className)}
+					/>
 				)}
 				<span
-					className={`overflow-hidden text-ellipsis whitespace-nowrap text-[13px]
-						${isDir ? "studio-text-secondary" : "studio-text"}`}
+					className={cn(
+						"overflow-hidden text-ellipsis whitespace-nowrap text-[13px]",
+						isDir ? "text-muted-foreground" : "text-foreground",
+					)}
 				>
 					{node.name}
 					{isDir ? "/" : ""}
 				</span>
 				{!isDir && style && (
-					<span
-						className="ml-auto text-[10px] flex-shrink-0"
-						style={{ color: style.color }}
-					>
+					<span className={cn("ml-auto text-[10px] flex-shrink-0", style.className)}>
 						{style.symbol}
 					</span>
 				)}

@@ -6,7 +6,7 @@ export function EmptyState() {
 	const { changes } = useStudioState();
 
 	return (
-		<div className="flex flex-col items-center justify-center h-full studio-dim gap-3">
+		<div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
 			<div className="text-3xl opacity-20">
 				{changes.length > 0 ? "\u2190" : "\u2726"}
 			</div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { X, Eye, Code } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { StudioTab } from "./types";
 import { getFileIcon, isPreviewable } from "./file-icons";
 
@@ -16,6 +18,8 @@ export function Tab({
 	onClose: () => void;
 	onTogglePreview: () => void;
 }) {
+	const Icon = getFileIcon(tab.name);
+
 	return (
 		<div
 			onClick={onActivate}
@@ -25,14 +29,21 @@ export function Tab({
 					onClose();
 				}
 			}}
-			className={`group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer select-none border-b-2 flex-shrink-0 min-w-[60px] transition-colors
-				${isActive ? "border-cyan-500 studio-tab-active" : "border-transparent studio-tab-inactive"}`}
+			className={cn(
+				"group flex items-center gap-1.5 px-3 h-full cursor-pointer select-none flex-shrink-0 min-w-[60px] transition-colors border-b",
+				isActive
+					? "bg-background text-foreground border-primary"
+					: "text-muted-foreground border-transparent hover:bg-muted/50",
+			)}
 			title={tab.path}
 		>
-			<span className="text-[10px] font-mono studio-dim flex-shrink-0">
-				{getFileIcon(tab.name)}
-			</span>
-			<span className={`text-[13px] truncate max-w-[120px] ${isActive ? "studio-text" : "studio-text-secondary"}`}>
+			<Icon className="size-3.5 flex-shrink-0 opacity-60" />
+			<span
+				className={cn(
+					"text-[13px] truncate max-w-[120px]",
+					isActive ? "text-foreground" : "text-muted-foreground",
+				)}
+			>
 				{tab.name}
 			</span>
 			{isPreviewable(tab.name) && (
@@ -42,11 +53,19 @@ export function Tab({
 						e.stopPropagation();
 						onTogglePreview();
 					}}
-					className={`text-[10px] px-1 rounded flex-shrink-0 transition-colors
-						${tab.mode === "preview" ? "text-cyan-400 bg-cyan-400/10" : "studio-dim opacity-0 group-hover:opacity-100 hover:studio-text"}`}
+					className={cn(
+						"flex-shrink-0 rounded p-0.5 transition-colors",
+						tab.mode === "preview"
+							? "text-primary bg-primary/10"
+							: "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground",
+					)}
 					title={tab.mode === "preview" ? "Show code" : "Show preview"}
 				>
-					{tab.mode === "preview" ? "\u25C9" : "\u25CB"}
+					{tab.mode === "preview" ? (
+						<Eye className="size-3" />
+					) : (
+						<Code className="size-3" />
+					)}
 				</button>
 			)}
 			<button
@@ -55,10 +74,14 @@ export function Tab({
 					e.stopPropagation();
 					onClose();
 				}}
-				className={`text-[11px] flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all
-					${isActive ? "studio-dim opacity-100 hover:studio-text hover:bg-[var(--studio-hover)]" : "studio-dim opacity-0 group-hover:opacity-100 hover:studio-text hover:bg-[var(--studio-hover)]"}`}
+				className={cn(
+					"flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all",
+					isActive
+						? "text-muted-foreground opacity-100 hover:text-foreground hover:bg-muted"
+						: "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted",
+				)}
 			>
-				{"\u2715"}
+				<X className="size-3" />
 			</button>
 		</div>
 	);

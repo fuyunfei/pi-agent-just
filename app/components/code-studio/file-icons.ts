@@ -1,3 +1,15 @@
+import type { LucideIcon } from "lucide-react";
+import {
+	File,
+	FileCode,
+	FileJson,
+	FileText,
+	Globe,
+	Hash,
+	Terminal,
+	Braces,
+} from "lucide-react";
+
 const EXTENSION_TO_LANG: Record<string, string> = {
 	ts: "typescript",
 	tsx: "tsx",
@@ -29,27 +41,35 @@ const EXTENSION_TO_LANG: Record<string, string> = {
 	txt: "text",
 };
 
-const EXTENSION_TO_ICON: Record<string, string> = {
-	ts: "TS",
-	tsx: "TX",
-	js: "JS",
-	jsx: "JX",
-	json: "{}",
-	html: "<>",
-	htm: "<>",
-	css: "#",
-	md: "Md",
-	sh: "$",
-	bash: "$",
-	py: "Py",
-	rs: "Rs",
-	go: "Go",
-	sql: "Sq",
-	yml: "Y",
-	yaml: "Y",
-	toml: "T",
-	svg: "Sv",
-	xml: "Xm",
+const EXTENSION_TO_ICON: Record<string, LucideIcon> = {
+	ts: FileCode,
+	tsx: FileCode,
+	js: FileCode,
+	jsx: FileCode,
+	mjs: FileCode,
+	cjs: FileCode,
+	py: FileCode,
+	rs: FileCode,
+	go: FileCode,
+	sql: FileCode,
+	json: FileJson,
+	html: Globe,
+	htm: Globe,
+	svg: Globe,
+	xml: Globe,
+	css: Hash,
+	scss: Hash,
+	md: FileText,
+	mdx: FileText,
+	txt: FileText,
+	sh: Terminal,
+	bash: Terminal,
+	zsh: Terminal,
+	yml: Braces,
+	yaml: Braces,
+	toml: Braces,
+	ini: Braces,
+	env: Terminal,
 };
 
 function getExtension(path: string): string {
@@ -62,8 +82,8 @@ export function getLanguageFromPath(path: string): string {
 	return EXTENSION_TO_LANG[getExtension(path)] || "text";
 }
 
-export function getFileIcon(path: string): string {
-	return EXTENSION_TO_ICON[getExtension(path)] || "f";
+export function getFileIcon(path: string): LucideIcon {
+	return EXTENSION_TO_ICON[getExtension(path)] || File;
 }
 
 export function isPreviewable(path: string): boolean {

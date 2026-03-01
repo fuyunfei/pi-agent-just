@@ -7,7 +7,6 @@ import {
 	useStudioState,
 } from "./CodeStudioContext";
 import { StudioToolbar } from "./StudioToolbar";
-import { TabBar } from "./TabBar";
 import { FileTreeSidebar } from "./FileTreeSidebar";
 import { ContentArea } from "./ContentArea";
 import { useStudioChanges } from "./useStudioChanges";
@@ -15,7 +14,7 @@ import { useStudioChanges } from "./useStudioChanges";
 function StudioInner({ style }: { style?: React.CSSProperties }) {
 	const dispatch = useStudioDispatch();
 	const { tabs, activeTabId } = useStudioState();
-	const { changes, mountPoint, loading, handleAction } = useStudioChanges();
+	const { changes, mountPoint, loading, handleAction, refetch } = useStudioChanges();
 
 	// Sync changes into context
 	useEffect(() => {
@@ -34,6 +33,15 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 		window.addEventListener("studio:file-written", handler);
 		return () => window.removeEventListener("studio:file-written", handler);
 	}, [dispatch]);
+
+	// Listen for rollback events — immediately refresh file list
+	useEffect(() => {
+		const handler = () => {
+			refetch();
+		};
+		window.addEventListener("studio:rollback", handler);
+		return () => window.removeEventListener("studio:rollback", handler);
+	}, [refetch]);
 
 	// Close all tabs when changes become empty (after reset)
 	useEffect(() => {
@@ -88,11 +96,10 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 
 	return (
 		<div
-			className="flex flex-col studio-surface text-[13px]"
+			className="flex flex-col bg-background text-foreground text-[13px]"
 			style={{ ...style, height: "100dvh", overflow: "hidden" }}
 		>
 			<StudioToolbar loading={loading} onAction={wrappedAction} />
-			<TabBar />
 			<div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
 				<FileTreeSidebar />
 				<div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>

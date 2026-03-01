@@ -240,47 +240,27 @@ noscript pre {
    Code Studio — theme-aware variables
    ═══════════════════════════════════════ */
 :root {
-  --studio-bg: #fafafa;
   --studio-surface: #ffffff;
   --studio-border: #e4e4e7;
   --studio-text: #18181b;
-  --studio-text-secondary: #71717a;
   --studio-dim: #a1a1aa;
   --studio-hover: rgba(0, 0, 0, 0.05);
-  --studio-selected: rgba(14, 165, 233, 0.10);
-  --studio-tab-active: rgba(0, 0, 0, 0.06);
-  --studio-tab-inactive-hover: rgba(0, 0, 0, 0.03);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --studio-bg: #09090b;
     --studio-surface: #09090b;
     --studio-border: #27272a;
     --studio-text: #e4e4e7;
-    --studio-text-secondary: #a1a1aa;
     --studio-dim: #71717a;
     --studio-hover: rgba(255, 255, 255, 0.05);
-    --studio-selected: rgba(14, 165, 233, 0.12);
-    --studio-tab-active: rgba(255, 255, 255, 0.06);
-    --studio-tab-inactive-hover: rgba(255, 255, 255, 0.03);
   }
 }
 
-/* Studio utility classes */
+/* Studio utility classes (kept for LivePreview) */
 .studio-surface { background: var(--studio-surface); color: var(--studio-text); }
 .studio-text { color: var(--studio-text); }
-.studio-text-secondary { color: var(--studio-text-secondary); }
 .studio-dim { color: var(--studio-dim); }
-.studio-border { border-color: var(--studio-border); }
-.studio-border-l { border-left: 1px solid var(--studio-border); }
-.studio-border-r { border-right: 1px solid var(--studio-border); }
-.studio-border-b { border-bottom: 1px solid var(--studio-border); }
-.studio-hover:hover { background: var(--studio-hover); }
-.studio-item-selected { background: var(--studio-selected); }
-.studio-item-hover:hover { background: var(--studio-hover); }
-.studio-tab-active { background: var(--studio-tab-active); }
-.studio-tab-inactive:hover { background: var(--studio-tab-inactive-hover); }
 
 /* Studio scrollbar hiding */
 .studio-tabbar {

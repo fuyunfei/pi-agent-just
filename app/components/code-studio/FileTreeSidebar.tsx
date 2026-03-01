@@ -101,9 +101,9 @@ export function FileTreeSidebar() {
 	if (!sidebarOpen) return null;
 
 	return (
-		<div className="w-[200px] min-w-[160px] studio-border-r overflow-y-auto flex-shrink-0">
+		<div className="w-[200px] min-w-[160px] border-r border-border overflow-y-auto flex-shrink-0">
 			{changes.length === 0 ? (
-				<div className="p-4 studio-dim text-xs text-center">
+				<div className="p-4 text-muted-foreground text-xs text-center">
 					No changes
 				</div>
 			) : (
