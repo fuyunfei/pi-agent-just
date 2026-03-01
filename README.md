@@ -1,5 +1,7 @@
 # pi-agent-just
 
+English | [中文](./README.zh-CN.md)
+
 A browser-based AI coding playground that fuses two independent systems — [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) (AI agent runtime) and [just-bash](https://github.com/niclas-niclas/just-bash) (TypeScript bash interpreter with in-memory filesystem) — into a single sandboxed environment where AI writes and executes real code, entirely in memory.
 
 ## Why this matters
