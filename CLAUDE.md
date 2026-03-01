@@ -1,96 +1,68 @@
 # CLAUDE.md
 
-## Project Overview
+## What this is
 
-pi-agent-just is a browser-based AI coding playground. Users chat with an AI agent that creates files in a sandboxed in-memory filesystem. Files are viewed, previewed, and downloaded via a Code Studio UI.
+pi-agent-just fuses [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) (AI agent runtime) with [just-bash](https://github.com/niclas-niclas/just-bash) (TypeScript bash + in-memory FS) into a browser-based coding playground. The AI gets a real shell and filesystem, but everything runs in-process — no Docker, no WASM, no system calls.
 
 ## Commands
 
 ```bash
-pnpm install          # Install dependencies
 pnpm dev              # Start dev server (Turbopack)
+npx tsc --noEmit      # Type check (ignore .next/dev/types/validator.ts)
 pnpm build            # Production build
-pnpm lint             # Run ESLint
-npx tsc --noEmit      # Type check
 ```
 
-## Architecture
+## Core architecture
 
 ```
-app/
-├── page.tsx                     # Root layout: CodeStudio | Splitter | ChatPanel
-├── api/
-│   ├── agent/
-│   │   ├── route.ts             # SSE streaming endpoint (POST)
-│   │   ├── singleton.ts         # AgentSession + OverlayFs + tools (persists across requests)
-│   │   └── command/route.ts     # Slash commands API (compact, session)
-│   ├── checkpoint/route.ts      # Conversation rollback + FS snapshot restore
-│   ├── model/route.ts           # Model switching (GET/POST)
-│   └── sandbox/route.ts         # File changes list + session reset
-└── components/
-    ├── chat/
-    │   ├── ChatPanel.tsx        # Chat UI (messages, input, footer)
-    │   ├── useChatAgent.ts      # Hook: SSE streaming, slash commands, state
-    │   ├── SlashCommandMenu.tsx  # Autocomplete menu for / commands
-    │   └── types.ts             # ChatMessage, ToolCall, SessionUsage, ModelInfo
-    ├── code-studio/
-    │   ├── CodeStudio.tsx       # Main layout + keyboard shortcuts
-    │   ├── CodeStudioContext.tsx # State: tabs, sidebar, changes
-    │   ├── StudioToolbar.tsx    # Toolbar: sidebar toggle, tabs, file count, actions
-    │   ├── FileTreeSidebar.tsx  # File tree with search filter + slide animation
-    │   ├── FileTreeNode.tsx     # Tree node with icons + change indicators
-    │   ├── ContentArea.tsx      # Tab content: code viewer or preview
-    │   ├── EmptyState.tsx       # No files placeholder
-    │   └── types.ts             # StudioTab, TreeNode, OverlayChange
-    └── ai-elements/             # Reusable chat UI primitives (prompt-input, message, etc.)
+app/api/agent/singleton.ts    ← The heart: OverlayFs + Bash + AgentSession singleton
+app/api/agent/route.ts        ← SSE streaming endpoint
+app/api/agent/command/        ← Slash command API (/compact, /session)
+app/api/checkpoint/           ← Conversation + FS snapshot rollback
+app/api/model/                ← Model switching
+app/api/sandbox/              ← File change list + session reset
+app/components/chat/          ← Chat UI, slash commands, SSE parsing
+app/components/code-studio/   ← File tree, code viewer, live preview
+components/ai-elements/       ← Shared chat primitives (don't modify unless necessary)
 ```
 
-## Key Patterns
+### The adapter pattern
 
-### Singleton (singleton.ts)
-Module-level singleton holds `AgentSession` + `OverlayFs` + `Bash` across requests. All tools use adapter functions that wrap OverlayFs methods into SDK operation interfaces (`BashOperations`, `ReadOperations`, etc.).
+pi-coding-agent defines tool **operations interfaces** (`BashOperations`, `ReadOperations`, etc.). The `singleton.ts` adapter functions implement them by delegating to just-bash's `OverlayFs` and `Bash`. This is the only glue code between the two systems — ~150 lines total.
 
-### SSE Streaming (route.ts)
-Agent events → SSE `data:` lines → frontend `useChatAgent` hook parses them. Events: `text-delta`, `tool-call-started`, `tool-input-available`, `tool-output-available`, `finish` (with usage stats).
+```
+pi-coding-agent tool  →  adapter function  →  OverlayFs / Bash method
+bash                     createJustBashOps     Bash.exec()
+read                     createOverlayReadOps  OverlayFs.readFile()
+write                    createOverlayWriteOps OverlayFs.writeFile()
+edit                     createOverlayEditOps  readFile + writeFile
+ls                       createOverlayLsOps    readdir + stat + exists
+find                     createOverlayFindOps  recursive walk + minimatch
+grep                     createOverlayGrepOps  readFile + isDirectory
+```
 
-### Slash Commands (useChatAgent.ts)
-Input starting with `/` intercepted before API call. `/new` resets everything. `/compact` and `/session` call `/api/agent/command`. `/model` handled in `SlashCommandMenu` (switches via `useChatAgent.switchModel`).
+### Adding a tool
 
-### Code Studio State (CodeStudioContext.tsx)
-React context + reducer pattern. Actions: `OPEN_FILE`, `CLOSE_TAB`, `SET_ACTIVE_TAB`, `TOGGLE_SIDEBAR`, `TOGGLE_PREVIEW`, `SET_CHANGES`, `FILE_WRITTEN`.
-
-## Agent Tools (7 total)
-
-All tools operate on OverlayFs (pure in-memory, no disk writes):
-
-| Tool | Adapter | SDK Interface |
-|------|---------|---------------|
-| bash | `createJustBashOps` | `BashOperations` |
-| read | `createOverlayReadOps` | `ReadOperations` |
-| write | `createOverlayWriteOps` | `WriteOperations` |
-| edit | `createOverlayEditOps` | `EditOperations` |
-| ls | `createOverlayLsOps` | `LsOperations` |
-| find | `createOverlayFindOps` | `FindOperations` |
-| grep | `createOverlayGrepOps` | `GrepOperations` |
-
-## Adding a New Tool
-
-1. Import `createXTool` and `type XOperations` from `@mariozechner/pi-coding-agent`
-2. Write `createOverlayXOps(fs: OverlayFs): XOperations` adapter in `singleton.ts`
+1. Import `createXTool` + `type XOperations` from `@mariozechner/pi-coding-agent`
+2. Write `createOverlayXOps(fs: OverlayFs): XOperations` adapter
 3. Add to `sandboxedTools` map
-4. Update system prompt tool list
+4. Update system prompt
 
-## Environment Variables
+### SSE streaming
 
-- `ANTHROPIC_API_KEY` — Anthropic API key
-- `OPENROUTER_API_KEY` — OpenRouter key (takes priority, routes all providers)
-- `PI_MODEL` — Model ID (default: `claude-haiku-4.5` / `anthropic/claude-haiku-4.5` for OpenRouter)
+`route.ts` streams agent events as `data: {json}\n\n`. The frontend `useChatAgent.ts` hook parses them. Key events: `text-delta`, `tool-call-started`, `tool-input-available`, `tool-output-available`, `finish` (with usage).
+
+### Filesystem snapshots
+
+Each agent turn, `OverlayFs.snapshot()` is stored keyed by entry ID. Rollback restores both conversation tree and FS state atomically.
+
+## Environment
+
+- `ANTHROPIC_API_KEY` or `OPENROUTER_API_KEY` (OpenRouter takes priority)
+- `PI_MODEL` — defaults to `claude-haiku-4.5`
 
 ## Guidelines
 
-- Always run `npx tsc --noEmit` after changes (ignore `.next/dev/types/validator.ts` errors)
-- UI uses shadcn/ui components from `components/ui/` + Lucide icons
-- Styling: Tailwind CSS 4 with shadcn tokens (`bg-background`, `text-foreground`, `border-border`, etc.)
-- The `components/ai-elements/` directory contains shared chat primitives — avoid modifying unless necessary
-- File operations must go through OverlayFs adapters, never touch real filesystem
-- SSE events follow a strict format: `data: {json}\n\n` — parse errors are silently skipped
+- UI: shadcn/ui + Lucide icons + Tailwind CSS 4 with shadcn tokens
+- File operations must go through OverlayFs adapters, never real filesystem
+- Always `npx tsc --noEmit` after changes
