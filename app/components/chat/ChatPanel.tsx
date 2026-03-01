@@ -98,13 +98,32 @@ export function ChatPanel() {
 			<Conversation className="flex-1">
 				<ConversationContent>
 					{messages.length === 0 && (
-						<div className="flex flex-col items-center justify-center h-full gap-2 text-center text-muted-foreground">
-							<p className="text-lg font-medium text-foreground">
-								What would you like to build?
-							</p>
-							<p className="text-sm">
-								Describe your project and I&apos;ll create it for you.
-							</p>
+						<div className="flex flex-col items-center justify-center h-full gap-4 text-center text-muted-foreground">
+							<div className="space-y-1">
+								<p className="text-lg font-medium text-foreground">
+									What would you like to build?
+								</p>
+								<p className="text-sm">
+									Describe your project and I&apos;ll create it for you.
+								</p>
+							</div>
+							<div className="flex flex-wrap justify-center gap-2 max-w-md">
+								{[
+									"A landing page with hero and pricing",
+									"A todo app with local storage",
+									"A dashboard with charts",
+									"An interactive form with validation",
+								].map((prompt) => (
+									<button
+										key={prompt}
+										type="button"
+										onClick={() => send(prompt)}
+										className="px-3 py-1.5 text-xs rounded-full border border-border hover:bg-accent hover:text-accent-foreground transition-colors"
+									>
+										{prompt}
+									</button>
+								))}
+							</div>
 						</div>
 					)}
 					{messages.map((msg) =>
