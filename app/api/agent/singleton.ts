@@ -5,8 +5,9 @@
 
 import { Bash, OverlayFs, type FsSnapshot } from "just-bash";
 import { mkdtempSync } from "fs";
-import { join } from "path";
+import { join, relative } from "path";
 import { tmpdir } from "os";
+import { minimatch } from "minimatch";
 import {
 	AgentSession,
 	AuthStorage,
@@ -15,6 +16,8 @@ import {
 	createWriteTool,
 	createEditTool,
 	createLsTool,
+	createFindTool,
+	createGrepTool,
 	createExtensionRuntime,
 	ModelRegistry,
 	SessionManager,
@@ -24,6 +27,8 @@ import {
 	type WriteOperations,
 	type EditOperations,
 	type LsOperations,
+	type FindOperations,
+	type GrepOperations,
 } from "@mariozechner/pi-coding-agent";
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
@@ -35,7 +40,7 @@ const SYSTEM_PROMPT = `You are an expert frontend engineer in a browser-based sa
 
 You have a fully sandboxed in-memory filesystem. All files you create exist only in memory — the user can view and preview them in real-time in the Code Studio panel, and download when ready.
 
-Available tools: bash, read, write, edit, ls.
+Available tools: bash, read, write, edit, ls, find, grep.
 
 ## What you can do
 - Create complete web projects (HTML, CSS, JS, TypeScript, React components)
@@ -132,6 +137,46 @@ function createOverlayLsOps(fs: OverlayFs): LsOperations {
 	};
 }
 
+function createOverlayFindOps(fs: OverlayFs): FindOperations {
+	return {
+		exists: (p: string) => fs.exists(p),
+		glob: async (pattern: string, cwd: string, opts: { ignore: string[]; limit: number }) => {
+			const results: string[] = [];
+
+			async function walk(dir: string) {
+				if (results.length >= opts.limit) return;
+				let entries: string[];
+				try { entries = await fs.readdir(dir); } catch { return; }
+				for (const entry of entries) {
+					if (results.length >= opts.limit) return;
+					const full = join(dir, entry);
+					const rel = relative(cwd, full);
+					if (opts.ignore.some((ig) => minimatch(rel, ig))) continue;
+					let stat;
+					try { stat = await fs.stat(full); } catch { continue; }
+					if (stat.isDirectory) {
+						await walk(full);
+					} else if (minimatch(rel, pattern) || minimatch(entry, pattern)) {
+						results.push(rel);
+					}
+				}
+			}
+			await walk(cwd);
+			return results;
+		},
+	};
+}
+
+function createOverlayGrepOps(fs: OverlayFs): GrepOperations {
+	return {
+		isDirectory: async (p: string) => {
+			const s = await fs.stat(p);
+			return s.isDirectory;
+		},
+		readFile: async (p: string) => await fs.readFile(p),
+	};
+}
+
 // ---------------------------------------------------------------------------
 // Module-level singleton — persists across requests
 // ---------------------------------------------------------------------------
@@ -185,6 +230,12 @@ export function getOrCreateSingleton() {
 		}),
 		ls: createLsTool(mountPoint, {
 			operations: createOverlayLsOps(overlayFs),
+		}),
+		find: createFindTool(mountPoint, {
+			operations: createOverlayFindOps(overlayFs),
+		}),
+		grep: createGrepTool(mountPoint, {
+			operations: createOverlayGrepOps(overlayFs),
 		}),
 	};
 

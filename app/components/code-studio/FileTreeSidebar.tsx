@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { SearchIcon } from "lucide-react";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { FileTreeNode } from "./FileTreeNode";
 import type { OverlayChange, TreeNode } from "./types";
@@ -76,12 +77,34 @@ function buildTree(changes: OverlayChange[], mountPoint: string): TreeNode[] {
 	return collapseNodes(root);
 }
 
+/** Filter tree nodes: keep nodes whose name/fullPath matches, plus ancestor dirs */
+function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+	const q = query.toLowerCase();
+	return nodes
+		.map((node) => {
+			const nameMatch = node.name.toLowerCase().includes(q) ||
+				node.fullPath.toLowerCase().includes(q);
+			const filteredChildren = filterTree(node.children, query);
+			// Keep if name matches or has matching descendants
+			if (nameMatch || filteredChildren.length > 0) {
+				return { ...node, children: filteredChildren };
+			}
+			return null;
+		})
+		.filter((n): n is TreeNode => n !== null);
+}
+
 export function FileTreeSidebar() {
 	const { changes, mountPoint, sidebarOpen, activeTabId } = useStudioState();
 	const dispatch = useStudioDispatch();
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+	const [filter, setFilter] = useState("");
 
 	const tree = useMemo(() => buildTree(changes, mountPoint), [changes, mountPoint]);
+	const filteredTree = useMemo(
+		() => (filter ? filterTree(tree, filter) : tree),
+		[tree, filter],
+	);
 
 	const toggleCollapse = useCallback((path: string) => {
 		setCollapsed((prev) => {
@@ -107,26 +130,49 @@ export function FileTreeSidebar() {
 			)}
 			style={{ width: sidebarOpen ? 200 : 0, minWidth: 0 }}
 		>
-			<div className="w-[200px] h-full overflow-y-auto">
-				{changes.length === 0 ? (
-					<div className="p-4 text-muted-foreground text-xs text-center">
-						No changes
-					</div>
-				) : (
-					<div className="py-1">
-						{tree.map((node) => (
-							<FileTreeNode
-								key={node.fullPath}
-								node={node}
-								depth={0}
-								selectedPath={activeTabId}
-								onSelect={handleSelect}
-								collapsed={collapsed}
-								onToggle={toggleCollapse}
+			<div className="w-[200px] h-full flex flex-col">
+				{/* Filter input — only visible when there are files */}
+				{changes.length > 0 && (
+					<div className="px-2 py-1.5 flex-shrink-0">
+						<div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1">
+							<SearchIcon className="size-3 text-muted-foreground/60 flex-shrink-0" />
+							<input
+								type="text"
+								value={filter}
+								onChange={(e) => setFilter(e.target.value)}
+								placeholder="Filter files..."
+								className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none"
 							/>
-						))}
+						</div>
 					</div>
 				)}
+
+				{/* File tree */}
+				<div className="flex-1 overflow-y-auto">
+					{changes.length === 0 ? (
+						<div className="p-4 text-muted-foreground text-xs text-center">
+							No changes
+						</div>
+					) : filteredTree.length === 0 ? (
+						<div className="p-4 text-muted-foreground text-xs text-center">
+							No matches
+						</div>
+					) : (
+						<div className="py-1">
+							{filteredTree.map((node) => (
+								<FileTreeNode
+									key={node.fullPath}
+									node={node}
+									depth={0}
+									selectedPath={activeTabId}
+									onSelect={handleSelect}
+									collapsed={filter ? new Set() : collapsed}
+									onToggle={toggleCollapse}
+								/>
+							))}
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	);
