@@ -28,7 +28,7 @@
     "cmdk": "^1.1.1",
     "embla-carousel-react": "^8.6.0",
     "geist": "^1.5.1",
-    "just-bash": "file:/tmp/just-bash-2.11.4.tgz",
+    "just-bash": "github:fuyunfei/just-bash",
     "lucide-react": "^0.575.0",
     "media-chrome": "^4.18.0",
     "motion": "^12.34.3",

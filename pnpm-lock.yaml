@@ -63,8 +63,8 @@ importers:
         specifier: ^1.5.1
         version: 1.7.0(next@16.2.0-canary.26(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       just-bash:
-        specifier: file:/tmp/just-bash-2.11.4.tgz
-        version: file:../../../../../../tmp/just-bash-2.11.4.tgz
+        specifier: github:fuyunfei/just-bash
+        version: https://codeload.github.com/fuyunfei/just-bash/tar.gz/8066d8ceba017e2be2e5fc6c7b1d59a646e2a606
       lucide-react:
         specifier: ^0.575.0
         version: 0.575.0(react@19.2.3)
@@ -4148,9 +4148,9 @@ packages:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
     engines: {node: '>=4.0'}
 
-  just-bash@file:../../../../../../tmp/just-bash-2.11.4.tgz:
-    resolution: {integrity: sha512-PVrMFDNQaUyKtDCH6aTtH3AWLTvyAqONqLYkWaOofaxHYnLGvUicN6+Ezd5Stf4nv1dLfrJUpqgzNY9/vqMr5Q==, tarball: file:../../../../../../tmp/just-bash-2.11.4.tgz}
-    version: 2.11.4
+  just-bash@https://codeload.github.com/fuyunfei/just-bash/tar.gz/8066d8ceba017e2be2e5fc6c7b1d59a646e2a606:
+    resolution: {tarball: https://codeload.github.com/fuyunfei/just-bash/tar.gz/8066d8ceba017e2be2e5fc6c7b1d59a646e2a606}
+    version: 2.11.6
     hasBin: true
 
   jwa@2.0.1:
@@ -10785,7 +10785,7 @@ snapshots:
       object.assign: 4.1.7
       object.values: 1.2.1
 
-  just-bash@file:../../../../../../tmp/just-bash-2.11.4.tgz:
+  just-bash@https://codeload.github.com/fuyunfei/just-bash/tar.gz/8066d8ceba017e2be2e5fc6c7b1d59a646e2a606:
     dependencies:
       compressjs: 1.0.3
       diff: 8.0.3
