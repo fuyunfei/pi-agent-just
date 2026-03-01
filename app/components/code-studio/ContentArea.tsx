@@ -29,7 +29,7 @@ export function ContentArea() {
 
 	return (
 		<div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-			<CodeViewer content={content} language={getLanguageFromPath(activeTab.path)} />
+			<CodeViewer content={content} language={getLanguageFromPath(activeTab.path)} filename={activeTab.name} />
 		</div>
 	);
 }

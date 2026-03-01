@@ -249,24 +249,21 @@ export function createAgentCommand(term: TerminalWriter) {
                 toolCallsMap.set(data.toolCallId, tc);
               }
             }
-            // Handle reasoning/thinking tokens - stream in real-time
+            // Handle reasoning/thinking tokens — dispatch to React overlay
             else if (data.type === "reasoning-start") {
-              clearThinking(); // Clear "Thinking..." before actual reasoning
-              // Start streaming thinking in dim italic
+              clearThinking();
               isStreaming = true;
-              term.write("\x1b[2m\x1b[3m"); // dim + italic
+              window.dispatchEvent(new CustomEvent("agent:reasoning", { detail: { type: "start" } }));
             }
             else if (data.type === "reasoning-delta" && data.delta) {
-              // Stream thinking tokens as they arrive
-              term.write(formatForTerminal(data.delta));
-              resetThinkingTimer(); // Keep resetting while actively streaming
+              window.dispatchEvent(new CustomEvent("agent:reasoning", { detail: { type: "delta", delta: data.delta } }));
+              resetThinkingTimer();
             }
             else if (data.type === "reasoning-end") {
-              // End thinking block
               if (isStreaming) {
-                term.write("\x1b[0m\r\n"); // reset styling + newline
                 isStreaming = false;
               }
+              window.dispatchEvent(new CustomEvent("agent:reasoning", { detail: { type: "end" } }));
             }
             // Handle errors
             else if (data.type === "error") {

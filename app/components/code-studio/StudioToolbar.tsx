@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Download, Trash2, PanelLeft } from "lucide-react";
 
 export function StudioToolbar({
 	loading,
@@ -25,19 +28,26 @@ export function StudioToolbar({
 	};
 
 	return (
-		<div className="flex items-center gap-2 px-3 h-10 studio-border-b flex-shrink-0">
-			<button
-				type="button"
-				onClick={() => dispatch({ type: "TOGGLE_SIDEBAR" })}
-				className="studio-dim hover:studio-text w-7 h-7 rounded flex items-center justify-center hover:bg-[var(--studio-hover)] transition-colors"
-				title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-			>
-				{sidebarOpen ? "\u25E8" : "\u25E7"}
-			</button>
+		<div className="flex items-center gap-2 px-2 h-10 studio-border-b flex-shrink-0">
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7"
+						onClick={() => dispatch({ type: "TOGGLE_SIDEBAR" })}
+					>
+						<PanelLeft className="h-4 w-4" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+				</TooltipContent>
+			</Tooltip>
 
 			{changes.length > 0 && (
-				<span className="studio-dim text-xs">
-					<span className="studio-text font-medium">{changes.length}</span>{" "}
+				<span className="text-muted-foreground text-xs">
+					<span className="text-foreground font-medium">{changes.length}</span>{" "}
 					file{changes.length !== 1 ? "s" : ""}
 				</span>
 			)}
@@ -46,23 +56,31 @@ export function StudioToolbar({
 
 			{changes.length > 0 && (
 				<div className="flex items-center gap-1.5">
-					<button
-						type="button"
-						onClick={() => onAction("download")}
-						disabled={loading}
-						className="px-3 h-7 text-xs font-medium rounded-md bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition-colors"
-					>
-						Download
-					</button>
-					<button
-						type="button"
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant="default"
+								size="sm"
+								className="h-7 gap-1.5"
+								onClick={() => onAction("download")}
+								disabled={loading}
+							>
+								<Download className="h-3.5 w-3.5" />
+								Download
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">Download files as ZIP</TooltipContent>
+					</Tooltip>
+					<Button
+						variant={confirmClear ? "destructive" : "outline"}
+						size="sm"
+						className="h-7 gap-1.5"
 						onClick={handleClear}
 						disabled={loading}
-						className={`px-3 h-7 text-xs rounded-md border transition-colors disabled:opacity-50
-							${confirmClear ? "border-red-500/50 text-red-400 bg-red-500/10 hover:bg-red-500/20" : "studio-border studio-text-secondary hover:bg-[var(--studio-hover)]"}`}
 					>
+						<Trash2 className="h-3.5 w-3.5" />
 						{confirmClear ? "Confirm?" : "Clear"}
-					</button>
+					</Button>
 				</div>
 			)}
 		</div>
