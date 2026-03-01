@@ -72,9 +72,18 @@ const AssistantMessage = memo(function AssistantMessage({ msg }: { msg: ChatMess
 				</Reasoning>
 			)}
 
-			{msg.tools?.map((tool) => <ToolCallCard key={tool.id} tool={tool} />)}
+			{msg.parts?.map((part, i) =>
+				part.type === "tool" ? (
+					<ToolCallCard key={part.tool.id} tool={part.tool} />
+				) : part.text ? (
+					<MessageContent key={`text-${i}`}>
+						<MessageResponse>{part.text}</MessageResponse>
+					</MessageContent>
+				) : null,
+			)}
 
-			{msg.content && (
+			{/* Fallback for messages without parts (e.g. error messages) */}
+			{!msg.parts?.length && msg.content && (
 				<MessageContent>
 					<MessageResponse>{msg.content}</MessageResponse>
 				</MessageContent>

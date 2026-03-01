@@ -6,12 +6,16 @@ export interface ToolCall {
 	output?: string;
 }
 
+export type MessagePart =
+	| { type: "text"; text: string }
+	| { type: "tool"; tool: ToolCall };
+
 export interface ChatMessage {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	parts?: MessagePart[];
 	reasoning?: string;
-	tools?: ToolCall[];
 	isStreaming?: boolean;
 	isReasoningStreaming?: boolean;
 }

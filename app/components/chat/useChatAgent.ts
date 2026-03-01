@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { ChatMessage, ToolCall } from "./types";
+import type { ChatMessage, MessagePart, ToolCall } from "./types";
 
 type UIMessage = {
 	id: string;
@@ -38,7 +38,7 @@ export function useChatAgent() {
 				id: nextId(),
 				role: "assistant",
 				content: "",
-				tools: [],
+				parts: [],
 				isStreaming: true,
 			};
 
@@ -54,6 +54,48 @@ export function useChatAgent() {
 
 			const controller = new AbortController();
 			abortRef.current = controller;
+
+			// Local mutable parts tracker (avoids closure staleness)
+			const partsTracker: MessagePart[] = [];
+			let fullText = "";
+
+			/** Append text delta — merge into last text part or create new one */
+			const appendText = (delta: string) => {
+				fullText += delta;
+				const last = partsTracker[partsTracker.length - 1];
+				if (last && last.type === "text") {
+					last.text += delta;
+				} else {
+					partsTracker.push({ type: "text", text: delta });
+				}
+				const snapshot = partsTracker.map((p) =>
+					p.type === "text" ? { ...p } : { type: "tool" as const, tool: { ...p.tool } },
+				);
+				updateLastAssistant((m) => ({ ...m, content: fullText, parts: snapshot }));
+			};
+
+			/** Add a tool part */
+			const addTool = (tool: ToolCall) => {
+				partsTracker.push({ type: "tool", tool });
+				const snapshot = partsTracker.map((p) =>
+					p.type === "text" ? { ...p } : { type: "tool" as const, tool: { ...p.tool } },
+				);
+				updateLastAssistant((m) => ({ ...m, parts: snapshot }));
+			};
+
+			/** Update a tool part in place */
+			const updateTool = (toolCallId: string, updater: (t: ToolCall) => ToolCall) => {
+				for (const part of partsTracker) {
+					if (part.type === "tool" && part.tool.id === toolCallId) {
+						part.tool = updater(part.tool);
+						break;
+					}
+				}
+				const snapshot = partsTracker.map((p) =>
+					p.type === "text" ? { ...p } : { type: "tool" as const, tool: { ...p.tool } },
+				);
+				updateLastAssistant((m) => ({ ...m, parts: snapshot }));
+			};
 
 			try {
 				const response = await fetch("/api/agent", {
@@ -83,7 +125,6 @@ export function useChatAgent() {
 
 				const decoder = new TextDecoder();
 				let buffer = "";
-				let fullText = "";
 
 				while (true) {
 					const { done, value } = await reader.read();
@@ -103,9 +144,7 @@ export function useChatAgent() {
 							const data = JSON.parse(jsonStr);
 
 							if (data.type === "text-delta" && data.delta) {
-								fullText += data.delta;
-								const captured = fullText;
-								updateLastAssistant((m) => ({ ...m, content: captured }));
+								appendText(data.delta);
 							} else if (data.type === "text-end") {
 								// flush
 							} else if (data.type === "reasoning-start") {
@@ -145,36 +184,16 @@ export function useChatAgent() {
 									);
 								}
 
-								updateLastAssistant((m) => ({
-									...m,
-									tools: [...(m.tools || []), tool],
-								}));
+								addTool(tool);
 							} else if (data.type === "tool-output-available" && data.toolCallId) {
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
-								updateLastAssistant((m) => ({
-									...m,
-									tools: (m.tools || []).map((t) =>
-										t.id === data.toolCallId
-											? { ...t, state: "completed" as const, output: result }
-											: t,
-									),
-								}));
+								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
 							} else if (data.type === "tool-output-error" || data.type === "tool-input-error") {
 								const errorMsg = data.error || "Tool error";
-								updateLastAssistant((m) => ({
-									...m,
-									tools: (m.tools || []).map((t) =>
-										t.id === data.toolCallId
-											? { ...t, state: "error" as const, output: String(errorMsg) }
-											: t,
-									),
-								}));
+								updateTool(data.toolCallId, (t) => ({ ...t, state: "error", output: String(errorMsg) }));
 							} else if (data.type === "error") {
 								const errorMsg = data.error || data.message || "Unknown error";
-								updateLastAssistant((m) => ({
-									...m,
-									content: m.content + `\n\n**Error:** ${errorMsg}`,
-								}));
+								appendText(`\n\n**Error:** ${errorMsg}`);
 							}
 						} catch {
 							// skip parse errors
@@ -221,7 +240,6 @@ export function useChatAgent() {
 	const clear = useCallback(() => {
 		setMessages([]);
 		historyRef.current = [];
-		// Also reset server-side sandbox
 		fetch("/api/sandbox", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
