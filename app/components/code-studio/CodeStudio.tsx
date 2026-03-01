@@ -96,15 +96,13 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 
 	return (
 		<div
-			className="flex flex-col bg-background text-foreground text-[13px]"
+			className="flex bg-background text-foreground text-[13px]"
 			style={{ ...style, height: "100dvh", overflow: "hidden" }}
 		>
-			<StudioToolbar loading={loading} onAction={wrappedAction} />
-			<div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
-				<FileTreeSidebar />
-				<div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-					<ContentArea />
-				</div>
+			<FileTreeSidebar />
+			<div className="flex flex-1 flex-col overflow-hidden" style={{ minWidth: 0 }}>
+				<StudioToolbar loading={loading} onAction={wrappedAction} />
+				<ContentArea />
 			</div>
 		</div>
 	);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { FileTreeNode } from "./FileTreeNode";
 import type { OverlayChange, TreeNode } from "./types";
@@ -98,29 +99,35 @@ export function FileTreeSidebar() {
 		[dispatch],
 	);
 
-	if (!sidebarOpen) return null;
-
 	return (
-		<div className="w-[200px] min-w-[160px] border-r border-border overflow-y-auto flex-shrink-0">
-			{changes.length === 0 ? (
-				<div className="p-4 text-muted-foreground text-xs text-center">
-					No changes
-				</div>
-			) : (
-				<div className="py-1">
-					{tree.map((node) => (
-						<FileTreeNode
-							key={node.fullPath}
-							node={node}
-							depth={0}
-							selectedPath={activeTabId}
-							onSelect={handleSelect}
-							collapsed={collapsed}
-							onToggle={toggleCollapse}
-						/>
-					))}
-				</div>
+		<div
+			className={cn(
+				"overflow-hidden flex-shrink-0 transition-[width,border-color] duration-150 ease-out border-r",
+				sidebarOpen ? "border-border" : "border-transparent",
 			)}
+			style={{ width: sidebarOpen ? 200 : 0, minWidth: 0 }}
+		>
+			<div className="w-[200px] h-full overflow-y-auto">
+				{changes.length === 0 ? (
+					<div className="p-4 text-muted-foreground text-xs text-center">
+						No changes
+					</div>
+				) : (
+					<div className="py-1">
+						{tree.map((node) => (
+							<FileTreeNode
+								key={node.fullPath}
+								node={node}
+								depth={0}
+								selectedPath={activeTabId}
+								onSelect={handleSelect}
+								collapsed={collapsed}
+								onToggle={toggleCollapse}
+							/>
+						))}
+					</div>
+				)}
+			</div>
 		</div>
 	);
 }
