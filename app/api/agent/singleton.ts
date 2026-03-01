@@ -245,7 +245,7 @@ export function getOrCreateSingleton() {
 	return singleton;
 }
 
-/** Return aggregated session stats + context usage. */
+/** Return aggregated session stats + context usage (minimal, for footer). */
 export function getSessionStats() {
 	if (!singleton) return null;
 	const stats = singleton.session.getSessionStats();
@@ -254,6 +254,46 @@ export function getSessionStats() {
 		totalTokens: stats.tokens.total,
 		cost: stats.cost,
 		contextPercent: context?.percent ?? null,
+	};
+}
+
+/** Return detailed session stats for /session command. */
+export function getFullSessionStats() {
+	if (!singleton) return null;
+	const stats = singleton.session.getSessionStats();
+	const context = singleton.session.getContextUsage();
+	const model = singleton.session.agent.state.model;
+	return {
+		model: model ? `${model.provider}/${model.id}` : "unknown",
+		messages: stats.totalMessages,
+		userMessages: stats.userMessages,
+		assistantMessages: stats.assistantMessages,
+		toolCalls: stats.toolCalls,
+		tokens: {
+			input: stats.tokens.input,
+			output: stats.tokens.output,
+			cacheRead: stats.tokens.cacheRead,
+			cacheWrite: stats.tokens.cacheWrite,
+			total: stats.tokens.total,
+		},
+		cost: stats.cost,
+		context: context
+			? {
+					tokens: context.tokens,
+					contextWindow: context.contextWindow,
+					percent: context.percent,
+				}
+			: null,
+	};
+}
+
+/** Manually compact the session context. */
+export async function compactSession() {
+	if (!singleton) throw new Error("No active session");
+	const result = await singleton.session.compact();
+	return {
+		summary: result.summary,
+		tokensBefore: result.tokensBefore,
 	};
 }
 

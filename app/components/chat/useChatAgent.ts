@@ -51,8 +51,104 @@ export function useChatAgent() {
 		[],
 	);
 
+	// ---------------------------------------------------------------------------
+	// Slash commands
+	// ---------------------------------------------------------------------------
+
+	const addSystemMessage = useCallback((content: string) => {
+		setMessages((prev) => [...prev, { id: nextId(), role: "system" as const, content }]);
+	}, []);
+
+	const runCommand = useCallback(
+		async (input: string): Promise<boolean> => {
+			const match = input.match(/^\/(\w+)\s*(.*)?$/);
+			if (!match) return false;
+			const [, cmd] = match;
+
+			if (cmd === "new") {
+				setMessages([]);
+				setUsage(null);
+				historyRef.current = [];
+				fetch("/api/sandbox", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ action: "clear" }),
+				}).catch(() => {});
+				window.dispatchEvent(new CustomEvent("studio:rollback"));
+				return true;
+			}
+
+			if (cmd === "compact") {
+				addSystemMessage("Compacting context...");
+				try {
+					const res = await fetch("/api/agent/command", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ command: "compact" }),
+					});
+					const data = await res.json();
+					if (data.ok) {
+						const kb = (data.result.tokensBefore / 1000).toFixed(1);
+						addSystemMessage(`Context compacted (was ${kb}k tokens). Summary preserved.`);
+					} else {
+						addSystemMessage(`Compaction failed: ${data.error}`);
+					}
+				} catch {
+					addSystemMessage("Compaction failed: network error");
+				}
+				return true;
+			}
+
+			if (cmd === "session") {
+				try {
+					const res = await fetch("/api/agent/command", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ command: "session" }),
+					});
+					const data = await res.json();
+					if (data.ok) {
+						const s = data.stats;
+						const lines = [
+							`Model: ${s.model}`,
+							`Messages: ${s.messages} (${s.userMessages} user, ${s.assistantMessages} assistant)`,
+							`Tool calls: ${s.toolCalls}`,
+							`Tokens: ${s.tokens.total.toLocaleString()} (in: ${s.tokens.input.toLocaleString()}, out: ${s.tokens.output.toLocaleString()}, cache read: ${s.tokens.cacheRead.toLocaleString()})`,
+							`Cost: $${s.cost.toFixed(4)}`,
+						];
+						if (s.context) {
+							const pct = s.context.percent != null ? `${Math.round(s.context.percent)}%` : "n/a";
+							lines.push(`Context: ${pct} of ${(s.context.contextWindow / 1000).toFixed(0)}k window`);
+						}
+						addSystemMessage(lines.join("\n"));
+					} else {
+						addSystemMessage("No active session");
+					}
+				} catch {
+					addSystemMessage("Failed to fetch session info");
+				}
+				return true;
+			}
+
+			// Unknown command
+			addSystemMessage(`Unknown command: /${cmd}\nAvailable: /new, /compact, /session`);
+			return true;
+		},
+		[addSystemMessage],
+	);
+
+	// ---------------------------------------------------------------------------
+	// Send message
+	// ---------------------------------------------------------------------------
+
 	const send = useCallback(
 		async (text: string, files?: FileUIPart[]) => {
+			// Intercept slash commands
+			if (text.startsWith("/") && !files?.length) {
+				await runCommand(text);
+				return;
+			}
+
 			const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
 			const assistantMsg: ChatMessage = {
 				id: nextId(),
@@ -319,7 +415,7 @@ export function useChatAgent() {
 				abortRef.current = null;
 			}
 		},
-		[updateLastAssistant],
+		[updateLastAssistant, runCommand],
 	);
 
 	const stop = useCallback(() => {

@@ -433,7 +433,13 @@ export function ChatPanel() {
 										onRollback={() => rollback(cp.entryId)}
 									/>
 								)}
-								{msg.role === "user" ? (
+								{msg.role === "system" ? (
+									<div className="flex justify-center px-10">
+										<pre className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-4 py-2 font-mono whitespace-pre-wrap max-w-full">
+											{msg.content}
+										</pre>
+									</div>
+								) : msg.role === "user" ? (
 									<Message from="user">
 										<MessageContent>{msg.content}</MessageContent>
 									</Message>
