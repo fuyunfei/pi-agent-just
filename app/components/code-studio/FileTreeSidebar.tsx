@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { FileTreeNode } from "./FileTreeNode";
 import type { OverlayChange, TreeNode } from "./types";
@@ -80,22 +80,25 @@ export function FileTreeSidebar() {
 	const dispatch = useStudioDispatch();
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-	if (!sidebarOpen) return null;
+	const tree = useMemo(() => buildTree(changes, mountPoint), [changes, mountPoint]);
 
-	const tree = buildTree(changes, mountPoint);
-
-	const toggleCollapse = (path: string) => {
+	const toggleCollapse = useCallback((path: string) => {
 		setCollapsed((prev) => {
 			const next = new Set(prev);
 			if (next.has(path)) next.delete(path);
 			else next.add(path);
 			return next;
 		});
-	};
+	}, []);
 
-	const handleSelect = (path: string, name: string) => {
-		dispatch({ type: "OPEN_FILE", path, name });
-	};
+	const handleSelect = useCallback(
+		(path: string, name: string) => {
+			dispatch({ type: "OPEN_FILE", path, name });
+		},
+		[dispatch],
+	);
+
+	if (!sidebarOpen) return null;
 
 	return (
 		<div className="w-[200px] min-w-[160px] studio-border-r overflow-y-auto flex-shrink-0">

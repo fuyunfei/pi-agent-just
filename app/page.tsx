@@ -1,8 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import CodeStudio from "./components/code-studio";
-import { ChatPanel } from "./components/chat";
+
+const CodeStudio = dynamic(() => import("./components/code-studio"), { ssr: false });
+const ChatPanel = dynamic(
+  () => import("./components/chat").then((m) => ({ default: m.ChatPanel })),
+  { ssr: false },
+);
 
 function Splitter({ onDrag }: { onDrag: (deltaX: number) => void }) {
   const dragging = useRef(false);

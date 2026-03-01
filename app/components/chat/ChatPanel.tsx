@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useCallback } from "react";
 import {
 	Conversation,
 	ConversationContent,
@@ -30,7 +31,7 @@ import {
 import { useChatAgent } from "./useChatAgent";
 import type { ChatMessage, ToolCall } from "./types";
 
-function ToolCallCard({ tool }: { tool: ToolCall }) {
+const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 	const title =
 		tool.toolName === "bash"
 			? `$ ${String(tool.args.command || tool.args.cmd || "").split("\n")[0]}`
@@ -56,9 +57,9 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
 			</ToolContent>
 		</Tool>
 	);
-}
+});
 
-function AssistantMessage({ msg }: { msg: ChatMessage }) {
+const AssistantMessage = memo(function AssistantMessage({ msg }: { msg: ChatMessage }) {
 	return (
 		<Message from="assistant">
 			{msg.reasoning !== undefined && (
@@ -80,15 +81,18 @@ function AssistantMessage({ msg }: { msg: ChatMessage }) {
 			)}
 		</Message>
 	);
-}
+});
 
 export function ChatPanel() {
 	const { messages, status, send, stop } = useChatAgent();
 
-	const handleSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) return;
-		send(text.trim());
-	};
+	const handleSubmit = useCallback(
+		({ text }: { text: string }) => {
+			if (!text.trim()) return;
+			send(text.trim());
+		},
+		[send],
+	);
 
 	const chatStatus =
 		status === "streaming" ? "streaming" : status === "error" ? "error" : "ready";

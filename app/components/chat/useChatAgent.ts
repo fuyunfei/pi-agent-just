@@ -226,6 +226,8 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
+		}).catch(() => {
+			// Server reset failed — UI is already cleared, will resync on next poll
 		});
 	}, []);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,16 +16,23 @@ export function StudioToolbar({
 	const { changes, sidebarOpen } = useStudioState();
 	const dispatch = useStudioDispatch();
 	const [confirmClear, setConfirmClear] = useState(false);
+	const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-	const handleClear = () => {
-		if (!confirmClear) {
-			setConfirmClear(true);
-			setTimeout(() => setConfirmClear(false), 3000);
-			return;
-		}
-		setConfirmClear(false);
-		onAction("clear");
-	};
+	useEffect(() => {
+		return () => clearTimeout(timerRef.current);
+	}, []);
+
+	const handleClear = useCallback(() => {
+		setConfirmClear((prev) => {
+			if (!prev) {
+				clearTimeout(timerRef.current);
+				timerRef.current = setTimeout(() => setConfirmClear(false), 3000);
+				return true;
+			}
+			onAction("clear");
+			return false;
+		});
+	}, [onAction]);
 
 	return (
 		<div className="flex items-center gap-2 px-2 h-10 studio-border-b flex-shrink-0">
