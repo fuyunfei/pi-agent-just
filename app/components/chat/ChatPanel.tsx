@@ -30,21 +30,10 @@ import {
 	AttachmentRemove,
 } from "@/components/ai-elements/attachments";
 import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
-import {
-	ModelSelector,
-	ModelSelectorTrigger,
-	ModelSelectorContent,
-	ModelSelectorInput,
-	ModelSelectorList,
-	ModelSelectorEmpty,
-	ModelSelectorItem,
-	ModelSelectorLogo,
-	ModelSelectorName,
-} from "@/components/ai-elements/model-selector";
+import { ModelSelectorLogo } from "@/components/ai-elements/model-selector";
 import { cn } from "@/lib/utils";
 import {
 	CheckCircle2Icon,
-	ChevronDownIcon,
 	ChevronRightIcon,
 	FileEditIcon,
 	FileIcon,
@@ -356,9 +345,12 @@ function AttachmentPreviews() {
 
 export function ChatPanel() {
 	const { messages, status, send, stop, rollback, currentModel, switchModel, usage } = useChatAgent();
-	const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
 
-	const slashMenu = useSlashCommandMenu(send);
+	const slashMenu = useSlashCommandMenu(send, {
+		models: AVAILABLE_MODELS,
+		currentModel,
+		onSwitchModel: switchModel,
+	});
 
 	const handleSubmit = useCallback(
 		({ text, files }: { text: string; files?: FileUIPart[] }) => {
@@ -460,9 +452,10 @@ export function ChatPanel() {
 			{/* Input area */}
 			<div className="relative border-t border-border/50 p-3">
 				<SlashCommandMenu
-					filtered={slashMenu.filtered}
+					items={slashMenu.items}
+					heading={slashMenu.heading}
 					selectedIndex={slashMenu.selectedIndex}
-					onSelect={slashMenu.select}
+					onSelect={slashMenu.selectItem}
 					visible={slashMenu.visible}
 				/>
 				<PromptInput
@@ -483,7 +476,6 @@ export function ChatPanel() {
 							<PromptInputButton
 								tooltip="Attach files"
 								onClick={() => {
-									// The PromptInput manages its own file input ref
 									const input = document.querySelector<HTMLInputElement>(
 										'input[type="file"][aria-label="Upload files"]',
 									);
@@ -493,49 +485,16 @@ export function ChatPanel() {
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
 
-							{/* Model selector */}
-							<ModelSelector open={modelSelectorOpen} onOpenChange={setModelSelectorOpen}>
-								<ModelSelectorTrigger asChild>
-									<button
-										type="button"
-										className={cn(
-											"flex items-center gap-1.5 rounded-md px-2 py-1",
-											"text-[11px] text-muted-foreground transition-colors",
-											"hover:bg-muted hover:text-foreground",
-										)}
-									>
-										{currentModel && (
-											<ModelSelectorLogo
-												provider={currentModel.provider as "anthropic"}
-												className="size-3"
-											/>
-										)}
-										<span>{currentModel?.label || "Model"}</span>
-										<ChevronDownIcon className="size-3 opacity-50" />
-									</button>
-								</ModelSelectorTrigger>
-								<ModelSelectorContent title="Select Model">
-									<ModelSelectorInput placeholder="Search models..." />
-									<ModelSelectorList>
-										<ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-										{AVAILABLE_MODELS.map((m) => (
-											<ModelSelectorItem
-												key={`${m.provider}/${m.id}`}
-												value={`${m.provider}/${m.id}`}
-												onSelect={() => {
-													switchModel(m.provider, m.id);
-													setModelSelectorOpen(false);
-												}}
-												className="flex items-center gap-2 py-2"
-											>
-												<ModelSelectorLogo provider={m.provider as "anthropic"} />
-												<ModelSelectorName>{m.label}</ModelSelectorName>
-												<span className="text-xs text-muted-foreground">{m.desc}</span>
-											</ModelSelectorItem>
-										))}
-									</ModelSelectorList>
-								</ModelSelectorContent>
-							</ModelSelector>
+							{/* Current model label */}
+							{currentModel && (
+								<div className="flex items-center gap-1.5 px-2 py-1 text-[11px] text-muted-foreground">
+									<ModelSelectorLogo
+										provider={currentModel.provider as "anthropic"}
+										className="size-3"
+									/>
+									<span>{currentModel.label}</span>
+								</div>
+							)}
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
