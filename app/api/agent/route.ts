@@ -70,8 +70,18 @@ export async function POST(req: Request) {
 					} else if (inner.type === "thinking_end") {
 						enqueue({ type: "reasoning-end" });
 					}
-					// Tool call streaming (toolcall_end has the full args)
-					else if (inner.type === "toolcall_end") {
+					// Tool call streaming
+					else if (inner.type === "toolcall_start") {
+						// Card appears immediately with spinner
+						const item = (inner.partial as any).content?.[inner.contentIndex];
+						if (item?.id && item?.name) {
+							enqueue({
+								type: "tool-call-started",
+								toolCallId: item.id,
+								toolName: item.name,
+							});
+						}
+					} else if (inner.type === "toolcall_end") {
 						const tc = inner.toolCall;
 						enqueue({
 							type: "tool-input-available",

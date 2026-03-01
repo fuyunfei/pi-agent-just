@@ -163,14 +163,33 @@ export function useChatAgent() {
 									...m,
 									isReasoningStreaming: false,
 								}));
-							} else if (data.type === "tool-input-available" && data.toolCallId) {
-								const args = (data.input || {}) as Record<string, unknown>;
+							} else if (data.type === "tool-call-started" && data.toolCallId) {
+								// Show card immediately when LLM starts generating tool call
 								const tool: ToolCall = {
 									id: data.toolCallId,
-									toolName: data.toolName,
-									args,
+									toolName: data.toolName || "tool",
+									args: {},
 									state: "running",
 								};
+								addTool(tool);
+							} else if (data.type === "tool-input-available" && data.toolCallId) {
+								const args = (data.input || {}) as Record<string, unknown>;
+
+								// Update existing card (from tool-call-started) or create new one
+								const existing = partsTracker.find(
+									(p) => p.type === "tool" && p.tool.id === data.toolCallId,
+								);
+								if (existing) {
+									updateTool(data.toolCallId, (t) => ({ ...t, args }));
+								} else {
+									const tool: ToolCall = {
+										id: data.toolCallId,
+										toolName: data.toolName,
+										args,
+										state: "running",
+									};
+									addTool(tool);
+								}
 
 								// Notify CodeStudio about file writes
 								if (
@@ -183,8 +202,6 @@ export function useChatAgent() {
 										}),
 									);
 								}
-
-								addTool(tool);
 							} else if (data.type === "tool-output-available" && data.toolCallId) {
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
