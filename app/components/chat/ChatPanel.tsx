@@ -353,11 +353,11 @@ export function ChatPanel() {
 
 	const handleSubmit = useCallback(
 		({ text, files }: { text: string; files?: FileUIPart[] }) => {
-			if (!text.trim()) return;
+			if (!text.trim() || status === "streaming") return;
 			slashMenu.setQuery("");
 			send(text.trim(), files?.length ? files : undefined);
 		},
-		[send, slashMenu],
+		[send, slashMenu, status],
 	);
 
 	const chatStatus =
@@ -465,7 +465,7 @@ export function ChatPanel() {
 					<AttachmentPreviews />
 					<PromptInputTextarea
 						placeholder="Describe what you want to build... (/ for commands)"
-						disabled={status === "streaming"}
+	
 						onChange={slashMenu.onTextareaChange}
 						onKeyDown={slashMenu.onTextareaKeyDown}
 					/>
