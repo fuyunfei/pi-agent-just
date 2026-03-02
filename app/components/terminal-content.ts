@@ -39,6 +39,8 @@ English | [中文](./README.zh-CN.md)
 
 A browser-based AI coding playground that fuses two independent systems — [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) (AI agent runtime) and [just-bash](https://github.com/niclas-niclas/just-bash) (TypeScript bash interpreter with in-memory filesystem) — into a single sandboxed environment where AI writes and executes real code, entirely in memory.
 
+Currently focused on **Remotion motion graphics**: AI generates React video components, the browser previews them in real-time, and Lambda renders MP4 exports in the cloud.
+
 ## Why this matters
 
 Most AI coding tools either generate code as text (no execution) or require a real OS-level sandbox (Docker, VM, WASM). This project takes a third path:
@@ -66,34 +68,70 @@ pi-coding-agent                    just-bash
 └─────────────────┘
 \`\`\`
 
-Each pi-coding-agent tool defines an **operations interface** (\`BashOperations\`, \`ReadOperations\`, etc.). The adapter functions in \`singleton.ts\` implement these interfaces by delegating to just-bash's \`OverlayFs\` and \`Bash\` classes. The agent doesn't know it's running in a virtual filesystem — it uses the same tools it would use on a real system.
-
 ## Architecture
 
 \`\`\`
 Browser                              Server (Next.js)
 ┌──────────────────────────────┐    ┌──────────────────────────────┐
 │                              │    │                              │
-│  Code Studio    │  Chat      │    │  /api/agent (SSE stream)     │
-│  ┌────────────┐ │            │    │    │                         │
-│  │ File Tree  │ │  Messages  │    │    ▼                         │
-│  │ (sidebar)  │ │  + Tools   │◀──▶│  AgentSession (singleton)   │
-│  ├────────────┤ │  + Slash   │ SSE│    │                         │
-│  │ Code View  │ │  Commands  │    │    ├─ Agent loop (LLM calls) │
-│  │ (Shiki)    │ │            │    │    ├─ Tool execution          │
-│  ├────────────┤ │  Token/    │    │    └─ Context management     │
-│  │ Preview    │ │  Cost      │    │                              │
-│  │ (iframe/   │ │  Tracking  │    │  OverlayFs + Bash            │
-│  │  Sandpack) │ │            │    │  (pure in-memory sandbox)    │
-│  └────────────┘ │            │    │                              │
+│  Player          │  Chat     │    │  /api/agent (SSE stream)     │
+│  ┌────────────┐  │           │    │    │                         │
+│  │ Remotion   │  │  Messages │    │    ▼                         │
+│  │ Player     │  │  + Tools  │◀──▶│  AgentSession (singleton)   │
+│  ├────────────┤  │  + Slash  │ SSE│    │                         │
+│  │ Segmented  │  │  Commands │    │    ├─ Agent loop (LLM calls) │
+│  │ progress   │  │           │    │    ├─ Tool execution          │
+│  ├────────────┤  │  Token/   │    │    └─ Context management     │
+│  │ Export     │  │  Cost     │    │                              │
+│  │ (clip pick)│  │  Tracking │    │  OverlayFs + Bash            │
+│  └────────────┘  │           │    │  (pure in-memory sandbox)    │
+│                              │    │                              │
 └──────────────────────────────┘    └──────────────────────────────┘
 \`\`\`
 
-The server maintains a **singleton** that persists across requests: one \`OverlayFs\` instance, one \`Bash\` instance, one \`AgentSession\`. Each user message triggers an agent loop that may invoke multiple tools, all operating on the same in-memory filesystem. The browser polls for file changes and renders them in real-time.
+### Remotion compiler
+
+AI-generated TSX can't run directly — it has import statements and JSX syntax. The compiler solves this:
+
+\`\`\`
+AI-generated TSX ──▶ @babel/standalone transpile ──▶ new Function()
+                                                          │
+                                        50+ pre-injected Remotion APIs
+                                        (AbsoluteFill, spring, interpolate,
+                                         Shapes, Transitions, Three.js...)
+\`\`\`
+
+\`stripImports()\` removes import statements, \`extractComponentBody()\` extracts the component function body, Babel transpiles JSX/TypeScript, and \`new Function()\` creates the React component with all Remotion APIs injected as parameters. The compiler lives in \`lib/remotion-compile.ts\` and is shared between browser preview and Lambda render.
+
+### Multi-scene playback
+
+Long videos are split by the AI into multiple scene files (\`scene-01-intro.tsx\`, \`scene-02-main.tsx\`...). The player auto-discovers all Remotion files, compiles each independently, and plays them in filename order:
+
+\`\`\`
+scene-01 ends ──▶ auto-advance to scene-02 ──▶ scene-03 ──▶ loop
+     │                       │                      │
+     └── segmented progress bar: proportional, click to seek ──┘
+\`\`\`
+
+### Lambda export
+
+\`\`\`
+User selects clips ──▶ POST /api/render ──▶ renderMediaOnLambda()
+                                                   │
+                                         Lambda loads S3 bundle
+                                         DynamicComp compiles each scene
+                                         <Sequence> composition
+                                         outputs MP4 to S3
+                                                   │
+User polls progress ◀── POST /api/render/progress ◀┘
+Downloads MP4       ◀── S3 presigned URL
+\`\`\`
+
+Single scene renders directly. Multiple scenes are composed with \`<Sequence>\` into one continuous video. Each scene is compiled independently — no naming conflicts.
 
 ### Filesystem snapshots
 
-Every agent turn, the \`OverlayFs\` state is snapshotted and keyed by session entry ID. Users can rollback to any previous checkpoint — both the conversation history and the filesystem state are restored atomically. This is only practical because the filesystem is pure data structures in memory.
+Every agent turn, the \`OverlayFs\` state is snapshotted and keyed by session entry ID. Users can rollback to any previous checkpoint — both the conversation history and the filesystem state are restored atomically.
 
 ## Quick Start
 
@@ -105,6 +143,17 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
 # or: OPENROUTER_API_KEY=sk-or-...
 
 pnpm dev
+\`\`\`
+
+### Lambda export (optional)
+
+\`\`\`bash
+# Set AWS credentials
+echo "REMOTION_AWS_ACCESS_KEY_ID=..." >> .env.local
+echo "REMOTION_AWS_SECRET_ACCESS_KEY=..." >> .env.local
+
+# Deploy Lambda function + S3 site bundle
+node deploy.mjs
 \`\`\`
 
 ## License

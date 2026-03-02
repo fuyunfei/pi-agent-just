@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import {
 	StudioProvider,
 	useStudioDispatch,
@@ -14,7 +14,7 @@ import { useStudioChanges } from "./useStudioChanges";
 function StudioInner({ style }: { style?: React.CSSProperties }) {
 	const dispatch = useStudioDispatch();
 	const { tabs, activeTabId } = useStudioState();
-	const { changes, mountPoint, loading, handleAction, refetch } = useStudioChanges();
+	const { changes, mountPoint, refetch } = useStudioChanges();
 
 	// Sync changes into context
 	useEffect(() => {
@@ -84,17 +84,14 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 		return () => window.removeEventListener("keydown", handler);
 	}, [dispatch, activeTabId, tabs]);
 
-	const wrappedAction = useCallback(
-		async (action: "download" | "clear") => {
-			await handleAction(action);
-			if (action === "clear") {
-				dispatch({ type: "CLOSE_ALL_TABS" });
-				// Tell chat panel to clear messages + session too
-				window.dispatchEvent(new CustomEvent("studio:clear-all"));
-			}
-		},
-		[handleAction, dispatch],
-	);
+	// Listen for clear-all from chat panel (server reset already done by useChatAgent.clear)
+	useEffect(() => {
+		const handler = () => {
+			dispatch({ type: "CLOSE_ALL_TABS" });
+		};
+		window.addEventListener("studio:clear-all", handler);
+		return () => window.removeEventListener("studio:clear-all", handler);
+	}, [dispatch]);
 
 	return (
 		<div
@@ -103,7 +100,7 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 		>
 			<FileTreeSidebar />
 			<div className="flex flex-1 flex-col overflow-hidden" style={{ minWidth: 0 }}>
-				<StudioToolbar loading={loading} onAction={wrappedAction} />
+				<StudioToolbar />
 				<ContentArea />
 			</div>
 		</div>

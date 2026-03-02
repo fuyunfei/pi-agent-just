@@ -39,10 +39,12 @@ import {
 	HistoryIcon,
 	Loader2Icon,
 	PaperclipIcon,
+	RotateCcwIcon,
 	SparklesIcon,
 	TerminalIcon,
 	XCircleIcon,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useChatAgent } from "./useChatAgent";
 import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
 import type { ChatMessage, ModelInfo, ToolCall } from "./types";
@@ -345,7 +347,25 @@ function AttachmentPreviews() {
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, rollback, currentModel, switchModel, usage } = useChatAgent();
+	const { messages, status, send, stop, clear, rollback, currentModel, switchModel, usage } = useChatAgent();
+	const [confirmClear, setConfirmClear] = useState(false);
+	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+	const handleClear = useCallback(() => {
+		if (!confirmClear) {
+			setConfirmClear(true);
+			clearTimerRef.current = setTimeout(() => setConfirmClear(false), 3000);
+			return;
+		}
+		clearTimeout(clearTimerRef.current);
+		setConfirmClear(false);
+		clear();
+		window.dispatchEvent(new CustomEvent("studio:clear-all"));
+	}, [confirmClear, clear]);
+
+	useEffect(() => {
+		return () => clearTimeout(clearTimerRef.current);
+	}, []);
 
 	const slashMenu = useSlashCommandMenu(send, {
 		models: AVAILABLE_MODELS,
@@ -385,7 +405,7 @@ export function ChatPanel() {
 
 	return (
 		<div className="flex flex-col h-full bg-background">
-			<Conversation className="flex-1">
+			<Conversation className="flex-1 relative">
 				<ConversationContent className="gap-6 px-4 py-6">
 					{/* Empty state */}
 					{messages.length === 0 && (
@@ -448,6 +468,22 @@ export function ChatPanel() {
 					})}
 				</ConversationContent>
 				<ConversationScrollButton />
+				{/* Floating new session button — top left */}
+				{messages.length > 0 && (
+					<button
+						type="button"
+						onClick={handleClear}
+						className={cn(
+							"absolute top-2 left-3 z-10 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-all",
+							confirmClear
+								? "bg-destructive/10 text-destructive border border-destructive/20"
+								: "text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent",
+						)}
+					>
+						<RotateCcwIcon className={cn("size-3", confirmClear && "animate-spin")} style={confirmClear ? { animationDuration: "1.5s" } : undefined} />
+						<span>{confirmClear ? "Confirm clear?" : "New"}</span>
+					</button>
+				)}
 			</Conversation>
 
 			{/* Input area */}

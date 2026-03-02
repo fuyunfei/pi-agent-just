@@ -289,6 +289,26 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}
 	}, [compiledKey]);
 
+	// Emit current scene index for sidebar sync
+	useEffect(() => {
+		window.dispatchEvent(new CustomEvent("studio:scene-update", {
+			detail: { index: sceneIndex },
+		}));
+	}, [sceneIndex]);
+
+	// Listen for scene selection from sidebar
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const idx = (e as CustomEvent).detail?.index;
+			if (typeof idx === "number" && idx >= 0 && idx < compiled.length) {
+				setCurrentIndex(idx);
+				setCurrentFrame(0);
+			}
+		};
+		window.addEventListener("studio:scene-select", handler);
+		return () => window.removeEventListener("studio:scene-select", handler);
+	}, [compiled.length]);
+
 	// Track frame updates — re-attach when Player remounts (playerKey changes)
 	useEffect(() => {
 		const player = playerRef.current;

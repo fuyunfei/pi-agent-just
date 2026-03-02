@@ -28,12 +28,28 @@ export async function GET() {
 
 export async function POST(req: Request) {
 	try {
-		const { action } = await req.json();
+		const body = await req.json();
+		const { action } = body;
 
 		if (action === "clear") {
 			console.log("[sandbox] clear");
 			resetSingleton();
 			return Response.json({ ok: true });
+		}
+
+		if (action === "delete") {
+			const { path } = body;
+			if (!path || typeof path !== "string") {
+				return Response.json({ error: "Missing path" }, { status: 400 });
+			}
+			const { overlayFs } = getOrCreateSingleton();
+			await overlayFs.rm(path);
+			console.log(`[sandbox] delete ${path}`);
+			const mountPoint = overlayFs.getMountPoint();
+			const changes = overlayFs
+				.getOverlayChanges()
+				.filter((c) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
+			return Response.json({ ok: true, changes, mountPoint });
 		}
 
 		return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });

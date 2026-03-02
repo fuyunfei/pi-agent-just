@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PanelLeft, Trash2, Film, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { PanelLeft, Film, Loader2, CheckCircle, XCircle } from "lucide-react";
 
 type RenderState =
 	| { status: "idle" }
@@ -286,36 +286,12 @@ function ExportButton() {
 	);
 }
 
-export function StudioToolbar({
-	loading,
-	onAction,
-}: {
-	loading: boolean;
-	onAction: (action: "download" | "clear") => void;
-}) {
+export function StudioToolbar() {
 	const { sidebarOpen } = useStudioState();
 	const dispatch = useStudioDispatch();
-	const [confirmClear, setConfirmClear] = useState(false);
-	const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-	useEffect(() => {
-		return () => clearTimeout(timerRef.current);
-	}, []);
-
-	const handleClear = useCallback(() => {
-		setConfirmClear((prev) => {
-			if (!prev) {
-				clearTimeout(timerRef.current);
-				timerRef.current = setTimeout(() => setConfirmClear(false), 3000);
-				return true;
-			}
-			queueMicrotask(() => onAction("clear"));
-			return false;
-		});
-	}, [onAction]);
 
 	return (
-		<div className="flex items-center h-[35px] border-b border-border flex-shrink-0">
+		<div className="flex items-center h-[35px] flex-shrink-0 bg-background/60 backdrop-blur-sm">
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Button
@@ -336,22 +312,6 @@ export function StudioToolbar({
 
 			<div className="flex items-center gap-1 px-2 flex-shrink-0">
 				<ExportButton />
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<Button
-							variant={confirmClear ? "destructive" : "ghost"}
-							size="icon"
-							className="h-7 w-7"
-							onClick={handleClear}
-							disabled={loading}
-						>
-							<Trash2 className="h-3.5 w-3.5" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent side="bottom">
-						{confirmClear ? "Click again to confirm" : "Clear session"}
-					</TooltipContent>
-				</Tooltip>
 			</div>
 		</div>
 	);

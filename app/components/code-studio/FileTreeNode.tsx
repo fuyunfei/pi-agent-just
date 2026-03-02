@@ -18,6 +18,7 @@ export function FileTreeNode({
 	onSelect,
 	collapsed,
 	onToggle,
+	onContextMenu,
 }: {
 	node: TreeNode;
 	depth: number;
@@ -25,6 +26,7 @@ export function FileTreeNode({
 	onSelect: (path: string, name: string) => void;
 	collapsed: Set<string>;
 	onToggle: (path: string) => void;
+	onContextMenu?: (e: React.MouseEvent, path: string, label: string) => void;
 }) {
 	const isDir = node.children.length > 0;
 	const isCollapsed = collapsed.has(node.fullPath);
@@ -40,6 +42,11 @@ export function FileTreeNode({
 						onToggle(node.fullPath);
 					} else if (node.change) {
 						onSelect(node.change.path, node.name);
+					}
+				}}
+				onContextMenu={(e) => {
+					if (!isDir && node.change && onContextMenu) {
+						onContextMenu(e, node.change.path, node.name);
 					}
 				}}
 				className={cn(
@@ -86,6 +93,7 @@ export function FileTreeNode({
 						onSelect={onSelect}
 						collapsed={collapsed}
 						onToggle={onToggle}
+						onContextMenu={onContextMenu}
 					/>
 				))}
 		</>

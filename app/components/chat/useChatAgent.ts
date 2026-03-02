@@ -476,16 +476,12 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
+		}).then(() => {
+			// Tell code-studio to refetch changes
+			window.dispatchEvent(new CustomEvent("studio:rollback"));
 		}).catch(() => {
 			// Server reset failed — UI is already cleared, will resync on next poll
 		});
-	}, [clearChat]);
-
-	// Listen for clear-all from code-studio (sandbox already reset by code-studio)
-	useEffect(() => {
-		const handler = () => clearChat();
-		window.addEventListener("studio:clear-all", handler);
-		return () => window.removeEventListener("studio:clear-all", handler);
 	}, [clearChat]);
 
 	const rollback = useCallback(async (entryId: string) => {
