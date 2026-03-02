@@ -23,17 +23,9 @@ export function useChatAgent() {
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
 
-	// Clear server session on mount (fresh start)
+	// Clean localStorage on mount (server state managed by explicit "New" button)
 	useEffect(() => {
 		localStorage.removeItem(STORAGE_KEY);
-		fetch("/api/sandbox", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: "clear" }),
-		}).then(() => {
-			// Trigger file list refresh after clear completes
-			window.dispatchEvent(new CustomEvent("studio:rollback"));
-		}).catch(() => {});
 	}, []);
 
 	// Fetch current model on mount
