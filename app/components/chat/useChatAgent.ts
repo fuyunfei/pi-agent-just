@@ -416,7 +416,7 @@ export function useChatAgent() {
 					});
 				}
 			} catch (err) {
-				if ((err as Error).name === "AbortError") {
+				if (controller.signal.aborted) {
 					updateLastAssistant((m) => ({ ...m, isStreaming: false }));
 					setStatus("ready");
 					return;
