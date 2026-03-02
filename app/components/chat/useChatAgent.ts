@@ -252,6 +252,7 @@ export function useChatAgent() {
 
 			// Local mutable parts tracker (avoids closure staleness)
 			const partsTracker: MessagePart[] = [];
+			const toolNameById = new Map<string, string>();
 			let fullText = "";
 
 			/** Append text delta — merge into last text part or create new one */
@@ -362,7 +363,7 @@ export function useChatAgent() {
 									isReasoningStreaming: false,
 								}));
 							} else if (data.type === "tool-call-started" && data.toolCallId) {
-								// Show card immediately when LLM starts generating tool call
+								toolNameById.set(data.toolCallId, data.toolName || "tool");
 								const tool: ToolCall = {
 									id: data.toolCallId,
 									toolName: data.toolName || "tool",
@@ -389,20 +390,14 @@ export function useChatAgent() {
 									addTool(tool);
 								}
 
-								// Notify CodeStudio about file writes
-								if (
-									(data.toolName === "write" || data.toolName === "writeFile" || data.toolName === "edit") &&
-									args.path
-								) {
-									window.dispatchEvent(
-										new CustomEvent("studio:file-written", {
-											detail: { path: String(args.path) },
-										}),
-									);
-								}
-							} else if (data.type === "tool-output-available" && data.toolCallId) {
+								} else if (data.type === "tool-output-available" && data.toolCallId) {
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
+								// Refresh file list after file-changing tools complete
+								const tn = toolNameById.get(data.toolCallId);
+								if (tn === "write" || tn === "writeFile" || tn === "edit" || tn === "bash") {
+									window.dispatchEvent(new CustomEvent("studio:file-written", { detail: { path: "" } }));
+								}
 							} else if (data.type === "tool-output-error" || data.type === "tool-input-error") {
 								const errorMsg = data.error || "Tool error";
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "error", output: String(errorMsg) }));
@@ -468,11 +463,15 @@ export function useChatAgent() {
 		abortRef.current?.abort();
 	}, []);
 
-	const clear = useCallback(() => {
+	const clearChat = useCallback(() => {
 		setMessages([]);
 		setUsage(null);
 		historyRef.current = [];
 		localStorage.removeItem(STORAGE_KEY);
+	}, []);
+
+	const clear = useCallback(() => {
+		clearChat();
 		fetch("/api/sandbox", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -480,7 +479,14 @@ export function useChatAgent() {
 		}).catch(() => {
 			// Server reset failed — UI is already cleared, will resync on next poll
 		});
-	}, []);
+	}, [clearChat]);
+
+	// Listen for clear-all from code-studio (sandbox already reset by code-studio)
+	useEffect(() => {
+		const handler = () => clearChat();
+		window.addEventListener("studio:clear-all", handler);
+		return () => window.removeEventListener("studio:clear-all", handler);
+	}, [clearChat]);
 
 	const rollback = useCallback(async (entryId: string) => {
 		try {

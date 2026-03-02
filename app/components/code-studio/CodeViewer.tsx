@@ -25,7 +25,7 @@ export function CodeViewer({
 			code={content}
 			language={language as BundledLanguage}
 			showLineNumbers
-			className="h-full rounded-none border-0"
+			className="h-full rounded-none border-0 flex flex-col [&>.overflow-auto]:flex-1 [&>.overflow-auto]:min-h-0"
 		>
 			<CodeBlockHeader>
 				<CodeBlockTitle>

@@ -285,7 +285,7 @@ export function createAgentCommand(term: TerminalWriter) {
               term.write(`\x1b[33m[Aborted]\x1b[0m\r\n`);
             }
           } catch (e) {
-            console.log("Parse error for line:", trimmedLine, e);
+            // SSE parse error — ignore partial chunks
           }
         }
       }

@@ -6,11 +6,16 @@ import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 import { getOrCreateSingleton, getSessionStats, persistCurrentSnapshot } from "./singleton";
 
 // ---------------------------------------------------------------------------
-// SSE helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
 function sseEvent(data: Record<string, unknown>): string {
 	return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+function trunc(s: unknown, n: number): string {
+	const str = String(s ?? "");
+	return str.length > n ? str.slice(0, n - 3) + "..." : str;
 }
 
 // ---------------------------------------------------------------------------
@@ -24,7 +29,8 @@ export async function POST(req: Request) {
 		.pop();
 	const promptText =
 		lastUserMessage?.parts?.[0]?.text || lastUserMessage?.content || "";
-	console.log("Prompt:", promptText);
+	const promptPreview = promptText.length > 80 ? promptText.slice(0, 77) + "..." : promptText;
+	console.log(`[route] prompt="${promptPreview}" images=${images?.length ?? 0}`);
 
 	let ctx: ReturnType<typeof getOrCreateSingleton>;
 	try {
@@ -49,6 +55,9 @@ export async function POST(req: Request) {
 					// Stream may be closed
 				}
 			};
+
+			// Track tool call args for logging (toolcall_end has args, tool_execution_end does not)
+			const toolArgs = new Map<string, Record<string, unknown>>();
 
 			const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
 				// Text streaming
@@ -83,6 +92,7 @@ export async function POST(req: Request) {
 						}
 					} else if (inner.type === "toolcall_end") {
 						const tc = inner.toolCall;
+						toolArgs.set(tc.id, tc.arguments as Record<string, unknown>);
 						enqueue({
 							type: "tool-input-available",
 							toolCallId: tc.id,
@@ -107,6 +117,15 @@ export async function POST(req: Request) {
 						toolCallId: event.toolCallId,
 						output,
 					});
+					// Log tool execution
+					const tn = event.toolName ?? "?";
+					const args = toolArgs.get(event.toolCallId) ?? {};
+					let detail = "";
+					if (tn === "write" || tn === "read" || tn === "edit") detail = ` path="${trunc(args.path ?? args.file_path, 60)}"`;
+					else if (tn === "bash") detail = ` cmd="${trunc(args.command, 60)}"`;
+					else if (tn === "grep") detail = ` pattern="${trunc(args.pattern, 40)}"`;
+					else if (tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
+					console.log(`[route] tool:${tn}${detail}`);
 				}
 
 				// Compaction events
@@ -127,6 +146,7 @@ export async function POST(req: Request) {
 					// Persist to /tmp so files survive cold starts
 					persistCurrentSnapshot();
 					const usage = getSessionStats();
+					console.log(`[route] done entry=${leafId ?? "?"} tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
 					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage });
 					try {
 						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -141,9 +161,11 @@ export async function POST(req: Request) {
 			// Fire the prompt (don't await — events stream via subscribe)
 			const promptOpts = images?.length ? { images } : undefined;
 			session.prompt(promptText, promptOpts).catch((err) => {
+				const msg = err instanceof Error ? err.message : String(err);
+				console.log(`[route] error: ${msg}`);
 				enqueue({
 					type: "error",
-					error: err instanceof Error ? err.message : String(err),
+					error: msg,
 				});
 				try {
 					controller.close();

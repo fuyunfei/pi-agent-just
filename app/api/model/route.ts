@@ -9,13 +9,15 @@ import { getModel } from "@mariozechner/pi-ai";
 import { getOrCreateSingleton } from "../agent/singleton";
 
 const AVAILABLE_MODELS = [
-	{ provider: "anthropic", id: "claude-haiku-4.5", label: "Haiku 4.5", desc: "Fast & cheap" },
-	{ provider: "anthropic", id: "claude-sonnet-4", label: "Sonnet 4", desc: "Balanced" },
-	{ provider: "anthropic", id: "claude-opus-4", label: "Opus 4", desc: "Most capable" },
-	{ provider: "openai", id: "gpt-4.1-mini", label: "GPT-4.1 Mini", desc: "Fast" },
-	{ provider: "openai", id: "gpt-4.1", label: "GPT-4.1", desc: "Capable" },
-	{ provider: "google", id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "Google" },
-	{ provider: "deepseek", id: "deepseek-chat", label: "DeepSeek V3", desc: "Cost effective" },
+	{ provider: "google", id: "gemini-3-flash-preview", label: "Gemini 3 Flash", desc: "Fast" },
+	{ provider: "google", id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", desc: "Capable" },
+	{ provider: "google", id: "gemini-3.1-pro-preview-customtools", label: "Gemini 3.1 Pro CT", desc: "Custom tools" },
+	{ provider: "google", id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", desc: "Cheapest" },
+	{ provider: "anthropic", id: "claude-haiku-4.5", label: "Haiku 4.5", desc: "Fast" },
+	{ provider: "anthropic", id: "claude-opus-4.6", label: "Opus 4.6", desc: "Most capable" },
+	{ provider: "deepseek", id: "deepseek-v3.2", label: "DeepSeek V3.2", desc: "Cost effective" },
+	{ provider: "moonshotai", id: "kimi-k2.5", label: "Kimi K2.5", desc: "Moonshot" },
+	{ provider: "minimax", id: "minimax-m2.5", label: "MiniMax M2.5", desc: "MiniMax" },
 ] as const;
 
 export async function GET() {
@@ -65,7 +67,9 @@ export async function POST(req: Request) {
 			);
 		}
 
+		const prev = session.model;
 		await session.setModel(model);
+		console.log(`[model] switch ${prev?.provider}/${prev?.id} -> ${model.provider}/${model.id}`);
 		return Response.json({
 			ok: true,
 			model: { provider: model.provider, id: model.id, name: model.name },

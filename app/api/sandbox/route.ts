@@ -31,6 +31,7 @@ export async function POST(req: Request) {
 		const { action } = await req.json();
 
 		if (action === "clear") {
+			console.log("[sandbox] clear");
 			resetSingleton();
 			return Response.json({ ok: true });
 		}

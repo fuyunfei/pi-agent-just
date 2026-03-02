@@ -329,6 +329,16 @@ noscript pre {
 .studio-markdown strong { font-weight: 600; }
 .studio-markdown em { font-style: italic; }
 
+/* Player progress bar hover */
+.player-bar:hover .player-bar-segment {
+  height: 6px !important;
+}
+
+@keyframes player-icon-fade {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

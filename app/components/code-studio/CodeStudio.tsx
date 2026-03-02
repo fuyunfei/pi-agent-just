@@ -89,6 +89,8 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 			await handleAction(action);
 			if (action === "clear") {
 				dispatch({ type: "CLOSE_ALL_TABS" });
+				// Tell chat panel to clear messages + session too
+				window.dispatchEvent(new CustomEvent("studio:clear-all"));
 			}
 		},
 		[handleAction, dispatch],

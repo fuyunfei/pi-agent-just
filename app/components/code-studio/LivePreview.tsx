@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import type { SandpackClient } from "@codesandbox/sandpack-client";
+import type { PlayerRef } from "@remotion/player";
 import type { BundledLanguage } from "shiki";
 import type { OverlayChange } from "./types";
 import { getLanguageFromPath } from "./file-icons";
+import { compileRemotionCode, isRemotionCode, parseRemotionConfig } from "./remotion-compiler";
 import {
 	CodeBlock,
 	CodeBlockHeader,
@@ -76,12 +78,13 @@ function MarkdownPreview({ content }: { content: string }) {
 }
 
 function SvgPreview({ content }: { content: string }) {
+	const src = useMemo(
+		() => `data:image/svg+xml,${encodeURIComponent(content)}`,
+		[content],
+	);
 	return (
 		<div style={{ ...fill, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }} className="studio-surface">
-			<div
-				style={{ maxWidth: "100%", maxHeight: "100%" }}
-				dangerouslySetInnerHTML={{ __html: content }}
-			/>
+			<img src={src} alt="SVG preview" style={{ maxWidth: "100%", maxHeight: "100%" }} />
 		</div>
 	);
 }
@@ -137,14 +140,11 @@ function buildSandpackFiles(
 /** Extract third-party package names from import/require statements across all files */
 function extractDependencies(files: Record<string, { code: string }>): Record<string, string> {
 	const deps: Record<string, string> = {};
-	// Match: import ... from "pkg" / import "pkg" / require("pkg")
 	const importRe = /(?:import\s+[\s\S]*?from\s+|import\s+|require\s*\(\s*)["']([^"'./][^"']*)["']/g;
 
 	for (const file of Object.values(files)) {
-		let match: RegExpExecArray | null;
-		while ((match = importRe.exec(file.code)) !== null) {
+		for (const match of file.code.matchAll(importRe)) {
 			const specifier = match[1];
-			// Get the package name (handle scoped packages like @foo/bar)
 			const pkgName = specifier.startsWith("@")
 				? specifier.split("/").slice(0, 2).join("/")
 				: specifier.split("/")[0];
@@ -183,6 +183,311 @@ function ensureEntry(files: Record<string, { code: string }>, activeFilePath: st
 	}
 
 	return files;
+}
+
+interface RemotionScene {
+	filename: string;
+	code: string;
+}
+
+/** Format frame count as mm:ss */
+function formatTime(frames: number, fps: number): string {
+	const totalSec = Math.floor(frames / fps);
+	const m = Math.floor(totalSec / 60);
+	const s = totalSec % 60;
+	return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+interface CompiledScene {
+	Component: React.ComponentType;
+	config: { fps: number; durationInFrames: number };
+	filename: string;
+	code: string;
+}
+
+function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
+	const [PlayerComp, setPlayerComp] = useState<typeof import("@remotion/player").Player | null>(null);
+	const playerRef = useRef<PlayerRef>(null);
+	const [currentIndex, setCurrentIndex] = useState(0);
+	const [playing, setPlaying] = useState(true);
+	const [currentFrame, setCurrentFrame] = useState(0);
+
+	// Compiled scenes
+	const [compiled, setCompiled] = useState<CompiledScene[]>([]);
+	const [error, setError] = useState<string | null>(null);
+	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const keyRef = useRef(0);
+	const [playerKey, setPlayerKey] = useState(0);
+
+	const sceneIndex = Math.min(currentIndex, Math.max(0, compiled.length - 1));
+
+	// Stable keys for dependency arrays — avoids recomputing .map().join() on every frame
+	const scenesKey = useMemo(() => scenes.map((s) => s.code).join("\0"), [scenes]);
+	const compiledKey = useMemo(() => compiled.map((s) => s.code).join("\0"), [compiled]);
+	const current = compiled[sceneIndex];
+
+	// Compute scene offsets for progress bar
+	const sceneOffsets = useMemo(() => {
+		const offsets: number[] = [];
+		let total = 0;
+		for (const s of compiled) {
+			offsets.push(total);
+			total += s.config.durationInFrames;
+		}
+		return { offsets, totalFrames: total };
+	}, [compiled]);
+
+	// Lazy-load @remotion/player
+	useEffect(() => {
+		import("@remotion/player").then((mod) => setPlayerComp(() => mod.Player));
+	}, []);
+
+	// Debounced compile ALL scenes
+	useEffect(() => {
+		clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => {
+			const results: CompiledScene[] = [];
+			let firstError: string | null = null;
+			for (const scene of scenes) {
+				const result = compileRemotionCode(scene.code);
+				if (result.Component) {
+					results.push({
+						Component: result.Component,
+						config: parseRemotionConfig(scene.code),
+						filename: scene.filename,
+						code: scene.code,
+					});
+				} else if (!firstError) {
+					firstError = `${scene.filename}: ${result.error}`;
+				}
+			}
+			if (results.length > 0) {
+				setCompiled(results);
+				keyRef.current += 1;
+				setPlayerKey(keyRef.current);
+				setError(firstError);
+			} else {
+				setError(firstError || "No valid scenes");
+			}
+		}, 600);
+		return () => clearTimeout(debounceRef.current);
+	}, [scenesKey]);
+
+	// Emit render data for header ExportButton
+	useEffect(() => {
+		if (compiled.length > 0) {
+			window.dispatchEvent(new CustomEvent("studio:render-data", {
+				detail: {
+					scenes: compiled.map((s) => ({
+						code: s.code,
+						filename: s.filename,
+						durationInFrames: s.config.durationInFrames,
+					})),
+					fps: compiled[0].config.fps,
+				},
+			}));
+		}
+	}, [compiledKey]);
+
+	// Track frame updates — re-attach when Player remounts (playerKey changes)
+	useEffect(() => {
+		const player = playerRef.current;
+		if (!player) return;
+		const onFrame = (e: { detail: { frame: number } }) => setCurrentFrame(e.detail.frame);
+		const onPlay = () => setPlaying(true);
+		const onPause = () => setPlaying(false);
+		player.addEventListener("frameupdate", onFrame);
+		player.addEventListener("play", onPlay);
+		player.addEventListener("pause", onPause);
+		return () => {
+			player.removeEventListener("frameupdate", onFrame);
+			player.removeEventListener("play", onPlay);
+			player.removeEventListener("pause", onPause);
+		};
+	}, [playerKey]);
+
+	// Auto-advance on scene end
+	useEffect(() => {
+		const player = playerRef.current;
+		if (!player) return;
+		const onEnded = () => {
+			if (sceneIndex < compiled.length - 1) {
+				setCurrentIndex(sceneIndex + 1);
+				setCurrentFrame(0);
+			} else {
+				setCurrentIndex(0);
+				setCurrentFrame(0);
+			}
+		};
+		player.addEventListener("ended", onEnded);
+		return () => player.removeEventListener("ended", onEnded);
+	}, [sceneIndex, compiled.length, playerKey]);
+
+	// Click video to toggle play/pause with visual feedback
+	const [showPlayIcon, setShowPlayIcon] = useState<"play" | "pause" | null>(null);
+	const iconTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const togglePlay = useCallback(() => {
+		const player = playerRef.current;
+		if (!player) return;
+		if (playing) {
+			player.pause();
+			setShowPlayIcon("pause");
+		} else {
+			player.play();
+			setShowPlayIcon("play");
+		}
+		clearTimeout(iconTimerRef.current);
+		iconTimerRef.current = setTimeout(() => setShowPlayIcon(null), 600);
+	}, [playing]);
+
+	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
+		({ error: err }: { error: Error }) => (
+			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#1a1a2e", padding: 40 }}>
+				<div style={{ color: "#ff6b6b", fontSize: 18, fontFamily: "system-ui", marginBottom: 12 }}>Runtime Error</div>
+				<div style={{ color: "#ccc", fontSize: 13, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word" }}>{err.message}</div>
+			</div>
+		),
+		[],
+	);
+
+	// Click on progress bar to seek — calculate which segment and position
+	const barRef = useRef<HTMLDivElement>(null);
+	const handleBarClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+		e.stopPropagation();
+		const bar = barRef.current;
+		if (!bar || compiled.length === 0) return;
+
+		const barRect = bar.getBoundingClientRect();
+		const clickX = e.clientX - barRect.left;
+		const globalRatio = Math.max(0, Math.min(1, clickX / barRect.width));
+		const globalTargetFrame = Math.floor(globalRatio * sceneOffsets.totalFrames);
+
+		// Find which scene this frame falls in
+		let accumFrames = 0;
+		for (let i = 0; i < compiled.length; i++) {
+			const sceneDur = compiled[i].config.durationInFrames;
+			if (globalTargetFrame < accumFrames + sceneDur || i === compiled.length - 1) {
+				const targetFrame = Math.min(globalTargetFrame - accumFrames, sceneDur - 1);
+				if (i !== sceneIndex) {
+					setCurrentIndex(i);
+					setTimeout(() => playerRef.current?.seekTo(targetFrame), 50);
+				} else {
+					playerRef.current?.seekTo(targetFrame);
+				}
+				break;
+			}
+			accumFrames += sceneDur;
+		}
+	}, [compiled, sceneIndex, sceneOffsets.totalFrames]);
+
+	if (!PlayerComp) {
+		return (
+			<div style={{ ...fill, display: "flex", alignItems: "center", justifyContent: "center" }} className="studio-surface studio-dim text-sm">
+				Loading Remotion Player...
+			</div>
+		);
+	}
+
+	if (compiled.length === 0 && error) {
+		return (
+			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }} className="studio-surface">
+				<div style={{ color: "#ff6b6b", fontSize: 15, fontFamily: "system-ui" }}>Compilation Error</div>
+				<div style={{ color: "#aaa", fontSize: 13, fontFamily: "monospace", textAlign: "center", maxWidth: "90%", wordBreak: "break-word", whiteSpace: "pre-wrap" }}>{error}</div>
+			</div>
+		);
+	}
+
+	if (!current) return null;
+
+	// Progress bar calculations
+	const { offsets, totalFrames } = sceneOffsets;
+	const globalFrame = offsets[sceneIndex] + currentFrame;
+	const fps = current.config.fps;
+
+	return (
+		<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} className="studio-surface">
+			{error && (
+				<div style={{ padding: "6px 16px", fontSize: 11, fontFamily: "monospace", color: "#ff6b6b", background: "rgba(255,107,107,0.08)", whiteSpace: "pre-wrap", maxHeight: 60, overflow: "auto", width: "100%" }}>
+					{error}
+				</div>
+			)}
+
+			{/* Video area — click to play/pause */}
+			<div
+				style={{
+					position: "relative", cursor: "pointer", aspectRatio: "16/9", width: "100%", maxWidth: 960,
+					borderRadius: 8, overflow: "hidden",
+					boxShadow: "0 2px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(128,128,128,0.1)",
+				}}
+				onClick={togglePlay}
+			>
+				{/* Play/Pause indicator */}
+				{showPlayIcon && (
+					<div style={{
+						position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+						zIndex: 10, pointerEvents: "none",
+					}}>
+						<div style={{
+							width: 56, height: 56, borderRadius: "50%",
+							background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
+							display: "flex", alignItems: "center", justifyContent: "center",
+							animation: "player-icon-fade 0.6s ease forwards",
+						}}>
+							{showPlayIcon === "play" ? (
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="white"><polygon points="6,4 20,12 6,20" /></svg>
+							) : (
+								<svg width="24" height="24" viewBox="0 0 24 24" fill="white"><rect x="5" y="4" width="4" height="16" rx="1" /><rect x="15" y="4" width="4" height="16" rx="1" /></svg>
+							)}
+						</div>
+					</div>
+				)}
+				<div style={{ width: "100%", height: "100%", pointerEvents: "none" }}>
+					<PlayerComp
+						ref={playerRef}
+						key={playerKey}
+						component={current.Component}
+						durationInFrames={current.config.durationInFrames}
+						fps={fps}
+						compositionHeight={1080}
+						compositionWidth={1920}
+						style={{ width: "100%", height: "100%" }}
+						autoPlay
+						loop={compiled.length <= 1}
+						errorFallback={errorFallback}
+					/>
+				</div>
+			</div>
+
+			{/* Progress bar + time */}
+			<div style={{ width: "100%", maxWidth: 960, display: "flex", alignItems: "center", gap: 12, padding: "20px 0 8px" }}>
+				<div
+					ref={barRef}
+					onClick={handleBarClick}
+					className="player-bar"
+					style={{ display: "flex", gap: 3, flex: 1, cursor: "pointer", padding: "6px 0" }}
+				>
+					{compiled.map((scene, i) => {
+						const weight = scene.config.durationInFrames / totalFrames;
+						let segProgress = 0;
+						if (i < sceneIndex) segProgress = 1;
+						else if (i === sceneIndex) segProgress = currentFrame / scene.config.durationInFrames;
+						return (
+							<div
+								key={scene.filename}
+								className="player-bar-segment"
+								style={{ flex: weight, height: 4, background: "var(--border)", borderRadius: 3, overflow: "hidden", transition: "height 0.15s" }}
+							>
+								<div style={{ width: `${segProgress * 100}%`, height: "100%", background: "#6366f1", borderRadius: 3 }} />
+							</div>
+						);
+					})}
+				</div>
+				<div style={{ fontSize: 11, fontFamily: "system-ui", color: "var(--muted-foreground)", flexShrink: 0, whiteSpace: "nowrap" }}>
+					{formatTime(globalFrame, fps)} / {formatTime(totalFrames, fps)}
+				</div>
+			</div>
+		</div>
+	);
 }
 
 function SandpackPreview({
@@ -334,6 +639,36 @@ function SandpackPreview({
 	);
 }
 
+/** Collect all remotion scene files from changes, sorted by filename */
+function collectRemotionScenes(
+	changes: OverlayChange[],
+	activeFilename: string,
+	activeContent: string,
+): RemotionScene[] {
+	const scenes: RemotionScene[] = [];
+	const seen = new Set<string>();
+
+	for (const c of changes) {
+		if (c.type === "deleted" || !c.content) continue;
+		const ext = getExtension(c.path);
+		if (!SANDPACK_EXTENSIONS.has(ext)) continue;
+		if (!isRemotionCode(c.content)) continue;
+		const name = c.path.split("/").pop() || c.path;
+		// Use activeContent for the currently selected file (may be more recent)
+		const code = name === activeFilename ? activeContent : c.content;
+		scenes.push({ filename: name, code });
+		seen.add(name);
+	}
+
+	// Ensure active file is included even if not yet in changes
+	if (!seen.has(activeFilename) && isRemotionCode(activeContent)) {
+		scenes.push({ filename: activeFilename, code: activeContent });
+	}
+
+	scenes.sort((a, b) => a.filename.localeCompare(b.filename));
+	return scenes;
+}
+
 export function LivePreview({
 	content,
 	filename,
@@ -348,6 +683,11 @@ export function LivePreview({
 	const ext = getExtension(filename);
 
 	if (SANDPACK_EXTENSIONS.has(ext)) {
+		// Collect all remotion scenes for playlist preview
+		if (isRemotionCode(content)) {
+			const scenes = collectRemotionScenes(changes, filename, content);
+			return <RemotionPreview scenes={scenes} />;
+		}
 		return <SandpackPreview content={content} filename={filename} changes={changes} mountPoint={mountPoint} />;
 	}
 

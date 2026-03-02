@@ -25,23 +25,18 @@ export function useStudioChanges() {
 		}
 	}, []);
 
-	// Visibility-aware polling — pause when tab is hidden
+	// Event-driven: fetch on file-written events instead of polling
 	useEffect(() => {
 		fetchChanges();
-		let id: ReturnType<typeof setInterval> | null = setInterval(fetchChanges, 2000);
 
-		const onVisibility = () => {
-			if (document.hidden) {
-				if (id) { clearInterval(id); id = null; }
-			} else {
-				fetchChanges();
-				if (!id) id = setInterval(fetchChanges, 2000);
-			}
-		};
+		const onFileWritten = () => fetchChanges();
+		const onVisibility = () => { if (!document.hidden) fetchChanges(); };
+
+		window.addEventListener("studio:file-written", onFileWritten);
 		document.addEventListener("visibilitychange", onVisibility);
 
 		return () => {
-			if (id) clearInterval(id);
+			window.removeEventListener("studio:file-written", onFileWritten);
 			document.removeEventListener("visibilitychange", onVisibility);
 		};
 	}, [fetchChanges]);
