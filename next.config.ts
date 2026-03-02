@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
     "@mariozechner/pi-coding-agent",
     "@mariozechner/pi-agent-core",
     "@mariozechner/pi-ai",
+    "@remotion/lambda",
+    "@remotion/bundler",
+    "@remotion/cli",
   ],
 };
 
