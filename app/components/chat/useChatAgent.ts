@@ -30,6 +30,9 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
+		}).then(() => {
+			// Trigger file list refresh after clear completes
+			window.dispatchEvent(new CustomEvent("studio:rollback"));
 		}).catch(() => {});
 	}, []);
 
