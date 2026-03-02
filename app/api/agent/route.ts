@@ -159,7 +159,9 @@ export async function POST(req: Request) {
 			});
 
 			// Fire the prompt (don't await — events stream via subscribe)
-			const promptOpts = images?.length ? { images } : undefined;
+			const promptOpts: Record<string, unknown> = {};
+			if (images?.length) promptOpts.images = images;
+			if (session.isStreaming) promptOpts.streamingBehavior = "followUp";
 			session.prompt(promptText, promptOpts).catch((err) => {
 				const msg = err instanceof Error ? err.message : String(err);
 				console.log(`[route] error: ${msg}`);
