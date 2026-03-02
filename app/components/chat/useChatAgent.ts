@@ -188,14 +188,14 @@ export function useChatAgent() {
 	// ---------------------------------------------------------------------------
 
 	const send = useCallback(
-		async (text: string, files?: FileUIPart[]) => {
+		async (text: string, files?: FileUIPart[], displayText?: string) => {
 			// Intercept slash commands
 			if (text.startsWith("/") && !files?.length) {
 				await runCommand(text);
 				return;
 			}
 
-			const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
+			const userMsg: ChatMessage = { id: nextId(), role: "user", content: displayText || text };
 			const assistantMsg: ChatMessage = {
 				id: nextId(),
 				role: "assistant",

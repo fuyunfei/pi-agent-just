@@ -608,9 +608,16 @@ export function ChatPanel() {
 	// Listen for retry-scene from error scene cards
 	useEffect(() => {
 		const handler = (e: Event) => {
-			const { filename, error } = (e as CustomEvent).detail || {};
+			const { filename, error, type } = (e as CustomEvent).detail || {};
 			if (filename && error) {
-				send(`Fix the error in ${filename}:\n${error}`);
+				const sceneLabel = filename.replace(/\.(tsx|jsx|ts|js)$/, "").replace(/^scene-\d+-/, "");
+				const friendlyName = sceneLabel ? sceneLabel.charAt(0).toUpperCase() + sceneLabel.slice(1) : filename;
+				const prefix = type === "runtime"
+					? `${filename} throws a runtime error when playing. Read the file, find the bug, and fix it with the edit tool.`
+					: `${filename} has a compilation error and cannot render. Read the file, find the syntax issue, and fix it with the edit tool.`;
+				const fullText = `${prefix}\n\nError:\n${error}`;
+				const displayText = `Fix "${friendlyName}"`;
+				send(fullText, undefined, displayText);
 			}
 		};
 		window.addEventListener("studio:retry-scene", handler);

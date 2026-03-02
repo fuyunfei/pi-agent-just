@@ -358,6 +358,50 @@ noscript pre {
   background: var(--muted-foreground);
 }
 
+/* Error fix buttons */
+.error-fix-button {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-family: system-ui, sans-serif;
+  font-weight: 500;
+  color: #fff;
+  background: #dc2626;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.error-fix-button:hover {
+  background: #ef4444;
+  transform: scale(1.03);
+}
+.error-fix-button:active {
+  background: #b91c1c;
+  transform: scale(0.97);
+}
+.error-fix-button-sm {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  font-weight: 500;
+  color: #fff;
+  background: #dc2626;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s;
+}
+.error-fix-button-sm:hover {
+  background: #ef4444;
+  transform: scale(1.05);
+}
+.error-fix-button-sm:active {
+  background: #b91c1c;
+  transform: scale(0.95);
+}
+
 @keyframes player-icon-fade {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.4); }

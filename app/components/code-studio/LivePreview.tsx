@@ -372,15 +372,23 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		iconTimerRef.current = setTimeout(() => setShowPlayIcon(null), 600);
 	}, [playing]);
 
+	const [runtimeError, setRuntimeError] = useState<string | null>(null);
+
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
-		({ error: err }: { error: Error }) => (
-			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#1a1a2e", padding: 40 }}>
-				<div style={{ color: "#ff6b6b", fontSize: 18, fontFamily: "system-ui", marginBottom: 12 }}>Runtime Error</div>
-				<div style={{ color: "#ccc", fontSize: 13, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word" }}>{err.message}</div>
-			</div>
-		),
+		({ error: err }: { error: Error }) => {
+			// Propagate error to state so we can render clickable overlay outside pointerEvents:none
+			setTimeout(() => setRuntimeError(err.message), 0);
+			return (
+				<div style={{ ...fill, background: "#1a1a2e" }} />
+			);
+		},
 		[],
 	);
+
+	// Clear runtime error on scene change
+	useEffect(() => {
+		setRuntimeError(null);
+	}, [sceneIndex]);
 
 	// Click on progress bar to seek — calculate which segment and position
 	const barRef = useRef<HTMLDivElement>(null);
@@ -423,7 +431,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	if (compiled.length === 0 && error) {
 		const sendFix = () => {
 			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename: scenes[0]?.filename || "scene", error },
+				detail: { filename: scenes[0]?.filename || "scene", error, type: "compile" },
 			}));
 		};
 		return (
@@ -433,7 +441,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				<button
 					type="button"
 					onClick={sendFix}
-					style={{ padding: "6px 16px", fontSize: 12, fontFamily: "system-ui", color: "#ff6b6b", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: 8, cursor: "pointer" }}
+					className="error-fix-button"
 				>
 					Ask AI to fix
 				</button>
@@ -451,7 +459,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	const sendFixPartial = () => {
 		if (error) {
 			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename: scenes[0]?.filename || "scene", error },
+				detail: { filename: scenes[0]?.filename || "scene", error, type: "compile" },
 			}));
 		}
 	};
@@ -482,9 +490,34 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 						<button
 							type="button"
 							onClick={sendFixPartial}
-							style={{ padding: "3px 10px", fontSize: 11, fontFamily: "system-ui", color: "#ff6b6b", background: "rgba(255,107,107,0.15)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+							className="error-fix-button-sm"
 						>
 							Fix
+						</button>
+					</div>
+				)}
+				{/* Runtime error overlay — outside pointerEvents:none player wrapper */}
+				{runtimeError && (
+					<div
+						onClick={(e) => e.stopPropagation()}
+						style={{
+							position: "absolute", inset: 0, zIndex: 20,
+							display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+							background: "rgba(10,10,30,0.92)", backdropFilter: "blur(4px)",
+						}}
+					>
+						<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "system-ui" }}>Runtime Error</div>
+						<div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word", whiteSpace: "pre-wrap", maxHeight: 100, overflow: "auto" }}>{runtimeError}</div>
+						<button
+							type="button"
+							onClick={() => {
+								window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+									detail: { filename: current?.filename || "scene", error: runtimeError, type: "runtime" },
+								}));
+							}}
+							className="error-fix-button"
+						>
+							Ask AI to fix
 						</button>
 					</div>
 				)}
