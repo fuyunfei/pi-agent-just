@@ -22,10 +22,21 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
+	const readyRef = useRef(false);
 
-	// Clean localStorage on mount (server state managed by explicit "New" button)
+	// Clear everything on mount (fresh start), block sends until done
 	useEffect(() => {
 		localStorage.removeItem(STORAGE_KEY);
+		fetch("/api/sandbox", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "clear" }),
+		}).then(() => {
+			readyRef.current = true;
+			window.dispatchEvent(new CustomEvent("studio:rollback"));
+		}).catch(() => {
+			readyRef.current = true;
+		});
 	}, []);
 
 	// Fetch current model on mount
@@ -151,6 +162,14 @@ export function useChatAgent() {
 
 	const send = useCallback(
 		async (text: string, files?: FileUIPart[], displayText?: string) => {
+			// Wait for mount clear to finish before first send
+			if (!readyRef.current) {
+				await new Promise<void>((resolve) => {
+					const check = () => { if (readyRef.current) resolve(); else setTimeout(check, 50); };
+					check();
+				});
+			}
+
 			// Intercept slash commands
 			if (text.startsWith("/") && !files?.length) {
 				await runCommand(text);
