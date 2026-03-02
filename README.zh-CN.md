@@ -2,35 +2,61 @@
 
 [English](./README.md) | 中文
 
-一个浏览器端的 AI 编程沙盒，将两个独立系统——[pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)（AI agent 运行时）和 [just-bash](https://github.com/niclas-niclas/just-bash)（纯 TypeScript 实现的 bash 解释器 + 内存文件系统）——融合为一个完整的沙盒环境。AI 在其中编写和执行真实代码，一切都在内存中完成。
+AI 驱动的动态图形生成器。描述你想要的画面，AI 使用 [Remotion](https://remotion.dev)（基于 React 的视频框架）创建动画视频。浏览器内即时预览，通过 AWS Lambda 导出 MP4。
 
-## 为什么这样做
+基于 [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent)（AI agent 运行时）+ [just-bash](https://github.com/niclas-niclas/just-bash)（内存中的 TypeScript bash/文件系统）。
 
-大多数 AI 编程工具要么只生成代码文本（不执行），要么需要真实的操作系统级沙盒（Docker、VM、WASM）。这个项目走了第三条路：
-
-**AI agent 拥有真实的 bash shell 和文件系统，但一切都在纯 TypeScript 进程内运行。** 没有容器，没有 WASM，没有系统调用。Agent 可以 `write` 文件、`bash` 执行脚本、`grep` 搜索内容——与人类开发者完全相同的工作流——但整个执行过程发生在 JavaScript 运行时内。文件只存在于内存中。沙盒的创建零成本，快照瞬时完成，回滚轻而易举。
-
-这一切通过两个系统之间的适配层实现：
+## 工作原理
 
 ```
-pi-coding-agent                    just-bash
-┌─────────────────┐               ┌─────────────────┐
-│  AgentSession   │               │    OverlayFs    │
-│  ┌───────────┐  │    适配器     │  (内存虚拟文件系统)│
-│  │ bash 工具 │──┼───────────────┼──▶ Bash          │
-│  │ read 工具 │──┼───────────────┼──▶ readFile      │
-│  │ write 工具│──┼───────────────┼──▶ writeFile     │
-│  │ edit 工具 │──┼───────────────┼──▶ read+write    │
-│  │ ls 工具   │──┼───────────────┼──▶ readdir+stat  │
-│  │ find 工具 │──┼───────────────┼──▶ glob 遍历     │
-│  │ grep 工具 │──┼───────────────┼──▶ readFile      │
-│  └───────────┘  │               └─────────────────┘
-│  模型、会话、    │
-│  压缩、上下文管理│
-└─────────────────┘
+用户: "做一个 60 秒的产品发布视频"
+         │
+         ▼
+   AI Agent 生成 Remotion .tsx 文件
+         │
+         ▼
+   ┌─────────────────────────────────┐
+   │  浏览器预览                      │
+   │  ┌───────────────────────────┐  │
+   │  │     Remotion Player       │  │
+   │  │  (实时编译 + 渲染)         │  │
+   │  └───────────────────────────┘  │
+   │  ━━━━━━━●━━━━━━━━━━━━━━━━━━━━  │
+   │  开场     功能展示     结尾     │
+   └─────────────────────────────────┘
+         │
+         ▼  导出
+   AWS Lambda → MP4（单场景或多场景合成）
 ```
 
-pi-coding-agent 的每个工具定义了一个 **operations 接口**（`BashOperations`、`ReadOperations` 等）。`singleton.ts` 中的适配函数通过委托给 just-bash 的 `OverlayFs` 和 `Bash` 类来实现这些接口。Agent 完全不知道自己运行在虚拟文件系统中——它使用的工具与真实系统上的完全一致。
+- **预览**：AI 生成的 Remotion 代码在浏览器中通过 `@babel/standalone` + `new Function()` 编译，注入 50+ Remotion API。多场景文件作为无缝播放列表播放，配有分段进度条。
+- **导出**：选中的场景发送到 AWS Lambda，编译后用 `<Sequence>` 合成，渲染为单个 MP4。支持逐片段或完整视频导出，通过 hover 复选框选择。
+- **沙盒**：AI agent 将代码写入内存文件系统（OverlayFs）。无 Docker，无 WASM——纯 TypeScript。
+
+## 快速开始
+
+```bash
+pnpm install
+
+# 设置 API 密钥（推荐 OpenRouter，模型选择更多）
+echo "OPENROUTER_API_KEY=sk-or-..." > .env.local
+# 或者: ANTHROPIC_API_KEY=sk-ant-...
+
+pnpm dev
+```
+
+### MP4 导出（可选）
+
+需要 AWS 凭证和一次性 Lambda 部署：
+
+```bash
+# 添加到 .env.local
+REMOTION_AWS_ACCESS_KEY_ID=...
+REMOTION_AWS_SECRET_ACCESS_KEY=...
+
+# 部署 Lambda 函数 + S3 站点包
+node deploy.mjs
+```
 
 ## 架构
 
@@ -38,37 +64,33 @@ pi-coding-agent 的每个工具定义了一个 **operations 接口**（`BashOper
 浏览器                                服务端 (Next.js)
 ┌──────────────────────────────┐    ┌──────────────────────────────┐
 │                              │    │                              │
-│  Code Studio    │  对话面板  │    │  /api/agent (SSE 流)         │
-│  ┌────────────┐ │            │    │    │                         │
-│  │ 文件树     │ │  消息      │    │    ▼                         │
-│  │ (侧边栏)  │ │  + 工具    │◀──▶│  AgentSession (单例)        │
-│  ├────────────┤ │  + 斜杠   │ SSE│    │                         │
-│  │ 代码视图   │ │    命令    │    │    ├─ Agent 循环 (LLM 调用)  │
-│  │ (Shiki)    │ │            │    │    ├─ 工具执行               │
-│  ├────────────┤ │  Token/   │    │    └─ 上下文管理              │
-│  │ 实时预览   │ │  费用追踪  │    │                              │
-│  │ (iframe/   │ │            │    │  OverlayFs + Bash            │
-│  │  Sandpack) │ │            │    │  (纯内存沙盒)                │
-│  └────────────┘ │            │    │                              │
+│  视频播放器    │  对话面板   │    │  /api/agent (SSE 流)         │
+│  ┌────────────┐│             │    │    │                         │
+│  │ Remotion   ││  提示词     │    │    ▼                         │
+│  │ Player     ││  + 工具    │◀──▶│  AgentSession (单例)         │
+│  ├────────────┤│  + 模型     │ SSE│    │                         │
+│  │ 进度条     ││             │    │    ├─ Agent 循环 (LLM 调用)  │
+│  │            ││  Token/     │    │    ├─ 工具执行               │
+│  ├────────────┤│  费用追踪   │    │    └─ 上下文管理             │
+│  │ 导出控件   ││             │    │                              │
+│  │            ││             │    │  /api/render → AWS Lambda    │
+│  └────────────┘│             │    │  /api/render/progress        │
+│                              │    │                              │
 └──────────────────────────────┘    └──────────────────────────────┘
 ```
 
-服务端维护一个跨请求持久化的**单例**：一个 `OverlayFs` 实例、一个 `Bash` 实例、一个 `AgentSession`。每条用户消息触发一个 agent 循环，可能调用多个工具，全部操作同一个内存文件系统。浏览器实时轮询文件变更并渲染。
+### 关键文件
 
-### 文件系统快照
-
-每次 agent 回合结束时，`OverlayFs` 的状态会被快照并以会话条目 ID 为键存储。用户可以回滚到任意历史检查点——对话历史和文件系统状态被原子性地恢复。这只有在文件系统是纯内存数据结构时才可行。
-
-## 快速开始
-
-```bash
-pnpm install
-
-# 设置 API 密钥
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
-# 或者: OPENROUTER_API_KEY=sk-or-...
-
-pnpm dev
+```
+lib/remotion-compile.ts           ← 共享编译器（浏览器 + Lambda）
+app/components/code-studio/
+  LivePreview.tsx                  ← Remotion Player + 播放列表 + 自定义控件
+  StudioToolbar.tsx                ← 导出 UI（场景选择）
+remotion/
+  DynamicComp.tsx                  ← Lambda 端合成（Sequence 拼接）
+  Root.tsx                         ← Remotion Composition 注册
+config.mjs / deploy.mjs           ← Lambda 部署配置 + 脚本
+app/api/agent/singleton.ts         ← Agent + OverlayFs + 系统提示词
 ```
 
 ## 许可证
