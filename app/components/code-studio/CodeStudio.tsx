@@ -84,6 +84,24 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 		return () => window.removeEventListener("keydown", handler);
 	}, [dispatch, activeTabId, tabs]);
 
+	// Listen for open-scene from chat scene cards — open tab + switch player
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { filename } = (e as CustomEvent).detail || {};
+			if (!filename) return;
+			// Find full path from changes (tool.args.path may be relative)
+			const match = changes.find((c) => c.path.endsWith(`/${filename}`) || c.path === filename);
+			if (!match) return;
+			dispatch({ type: "OPEN_FILE", path: match.path, name: filename });
+			// Switch player after RemotionPreview has time to mount
+			setTimeout(() => {
+				window.dispatchEvent(new CustomEvent("studio:scene-select", { detail: { filename } }));
+			}, 300);
+		};
+		window.addEventListener("studio:open-scene", handler);
+		return () => window.removeEventListener("studio:open-scene", handler);
+	}, [dispatch, changes]);
+
 	// Listen for clear-all from chat panel (server reset already done by useChatAgent.clear)
 	useEffect(() => {
 		const handler = () => {

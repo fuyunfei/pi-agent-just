@@ -364,33 +364,39 @@ export function useChatAgent() {
 								}));
 							} else if (data.type === "tool-call-started" && data.toolCallId) {
 								toolNameById.set(data.toolCallId, data.toolName || "tool");
-								const tool: ToolCall = {
-									id: data.toolCallId,
-									toolName: data.toolName || "tool",
-									args: {},
-									state: "running",
-								};
-								addTool(tool);
+								const args = (data.input || {}) as Record<string, unknown>;
+								// Create card or update if already created by tool-input-available
+								const existing = partsTracker.find(
+									(p) => p.type === "tool" && p.tool.id === data.toolCallId,
+								);
+								if (existing) {
+									updateTool(data.toolCallId, (t) => ({ ...t, args: { ...t.args, ...args } }));
+								} else {
+									addTool({
+										id: data.toolCallId,
+										toolName: data.toolName || "tool",
+										args,
+										state: "running",
+									});
+								}
 							} else if (data.type === "tool-input-available" && data.toolCallId) {
 								const args = (data.input || {}) as Record<string, unknown>;
-
-								// Update existing card (from tool-call-started) or create new one
+								// Update existing card or create if tool-call-started hasn't arrived yet
 								const existing = partsTracker.find(
 									(p) => p.type === "tool" && p.tool.id === data.toolCallId,
 								);
 								if (existing) {
 									updateTool(data.toolCallId, (t) => ({ ...t, args }));
 								} else {
-									const tool: ToolCall = {
+									toolNameById.set(data.toolCallId, data.toolName || "tool");
+									addTool({
 										id: data.toolCallId,
-										toolName: data.toolName,
+										toolName: data.toolName || "tool",
 										args,
 										state: "running",
-									};
-									addTool(tool);
+									});
 								}
-
-								} else if (data.type === "tool-output-available" && data.toolCallId) {
+							} else if (data.type === "tool-output-available" && data.toolCallId) {
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
 								// Refresh file list after file-changing tools complete

@@ -1,26 +1,20 @@
 "use client";
 
-import { useStudioState } from "./CodeStudioContext";
+import { Film } from "lucide-react";
 
 export function EmptyState() {
-	const { changes } = useStudioState();
-
 	return (
-		<div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
-			<div className="text-3xl opacity-20">
-				{changes.length > 0 ? "\u2190" : "\u2726"}
+		<div className="flex flex-col items-center justify-center h-full gap-4 px-6 text-center">
+			<div className="flex size-12 items-center justify-center rounded-2xl bg-foreground/[0.03]">
+				<Film className="size-5 text-muted-foreground/40" />
 			</div>
-			<div className="text-center">
-				<div className="text-[13px]">
-					{changes.length > 0
-						? "Select a file to view it"
-						: "No files changed yet"}
-				</div>
-				{changes.length === 0 && (
-					<div className="text-xs opacity-50 mt-1">
-						Use the terminal to create or edit files
-					</div>
-				)}
+			<div className="space-y-1">
+				<p className="text-[13px] text-muted-foreground">
+					Your video preview will appear here
+				</p>
+				<p className="text-xs text-muted-foreground/50">
+					Describe what you want in the chat →
+				</p>
 			</div>
 		</div>
 	);

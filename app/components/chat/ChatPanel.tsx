@@ -6,6 +6,7 @@ import {
 	ConversationContent,
 	ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 import {
 	Message,
 	MessageContent,
@@ -32,16 +33,27 @@ import {
 import { usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import {
+	BookOpenIcon,
+	BriefcaseIcon,
 	CheckCircle2Icon,
 	ChevronRightIcon,
+	ClapperboardIcon,
 	FileEditIcon,
 	FileIcon,
+	FilmIcon,
+	GraduationCapIcon,
+	HeartIcon,
 	HistoryIcon,
 	Loader2Icon,
+	MusicIcon,
 	PaperclipIcon,
+	PlayIcon,
+	RocketIcon,
 	RotateCcwIcon,
+	ShoppingBagIcon,
 	SparklesIcon,
 	TerminalIcon,
+	TrendingUpIcon,
 	XCircleIcon,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -70,7 +82,54 @@ const AVAILABLE_MODELS: ModelInfo[] = [
 /*  Tool call — compact inline card (V0-style)                        */
 /* ------------------------------------------------------------------ */
 
-function toolDisplayInfo(tool: ToolCall) {
+/** "scene-01-intro.tsx" → "Intro" */
+function sceneLabel(filename: string): string {
+	const base = filename.replace(/\.(tsx|jsx|ts|js)$/, "");
+	const stripped = base.replace(/^scene-\d+-/, "");
+	if (stripped) return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+	return base;
+}
+
+/** Check if a tool call involves a Remotion scene file */
+function isRemotionSceneTool(tool: ToolCall): boolean {
+	const name = tool.toolName;
+	const hasArgs = Object.keys(tool.args).length > 0;
+
+	// Write tool: always treat as scene (this app is Remotion-focused)
+	// During streaming args are empty — show scene card anyway
+	if (name === "write" || name === "writeFile" || name === "createFile") {
+		if (!hasArgs) return true; // streaming, no args yet — assume scene
+		const content = String(tool.args.content || "");
+		return /from\s+["']remotion["']/.test(content);
+	}
+	if (name === "edit" || name === "editFile") {
+		const path = String(tool.args.path || tool.args.file_path || "");
+		const filename = path.split("/").pop() || "";
+		const content = String(tool.args.new_string || tool.args.old_string || "");
+		return /from\s+["']remotion["']/.test(content) || /^scene-\d+.*\.(tsx|jsx)$/.test(filename);
+	}
+	return false;
+}
+
+/** Parse duration from @remotion config comment */
+function parseSceneDuration(content: string): string | null {
+	const match = content.match(/\/\/\s*@remotion\s+fps:(\d+)\s+duration:(\d+)/);
+	if (!match) return null;
+	const fps = parseInt(match[1]);
+	const frames = parseInt(match[2]);
+	const sec = Math.floor(frames / fps);
+	return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
+}
+
+interface ToolDisplay {
+	icon: React.ReactNode;
+	label: string;
+	isScene?: boolean;
+	isEdit?: boolean;
+	sceneDuration?: string | null;
+}
+
+function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	const name = tool.toolName;
 	const args = tool.args;
 
@@ -85,6 +144,17 @@ function toolDisplayInfo(tool: ToolCall) {
 	if (name === "write" || name === "writeFile" || name === "createFile") {
 		const path = String(args.path || args.file_path || "");
 		const short = path.split("/").pop() || path;
+
+		if (isRemotionSceneTool(tool)) {
+			const content = String(args.content || "");
+			return {
+				icon: <PlayIcon className="size-3 fill-current" />,
+				label: short ? sceneLabel(short) : "New scene",
+				isScene: true,
+				sceneDuration: parseSceneDuration(content),
+			};
+		}
+
 		return {
 			icon: <FileEditIcon className="size-3.5" />,
 			label: short,
@@ -94,6 +164,16 @@ function toolDisplayInfo(tool: ToolCall) {
 	if (name === "edit" || name === "editFile") {
 		const path = String(args.path || args.file_path || "");
 		const short = path.split("/").pop() || path;
+
+		if (isRemotionSceneTool(tool)) {
+			return {
+				icon: <PlayIcon className="size-3 fill-current" />,
+				label: sceneLabel(short),
+				isScene: true,
+				isEdit: true,
+			};
+		}
+
 		return {
 			icon: <FileEditIcon className="size-3.5" />,
 			label: `edit ${short}`,
@@ -122,7 +202,7 @@ function toolDisplayInfo(tool: ToolCall) {
 
 const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 	const [expanded, setExpanded] = useState(false);
-	const { icon, label } = useMemo(() => toolDisplayInfo(tool), [tool]);
+	const display = useMemo(() => toolDisplayInfo(tool), [tool]);
 
 	const stateIcon =
 		tool.state === "running" ? (
@@ -135,6 +215,87 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 
 	const hasOutput = !!tool.output;
 
+	// Scene card — styled like sidebar scene list
+	if (display.isScene) {
+		const isReady = tool.state === "completed";
+		const isError = tool.state === "error";
+
+		const handleSceneClick = () => {
+			if (isReady) {
+				const path = String(tool.args.path || tool.args.file_path || "");
+				const filename = path.split("/").pop() || path;
+				window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
+			} else if (isError && tool.output) {
+				// Send error to AI for retry
+				const path = String(tool.args.path || tool.args.file_path || "");
+				const filename = path.split("/").pop() || path;
+				window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+					detail: { filename, error: tool.output },
+				}));
+			}
+		};
+
+		return (
+			<div className="my-1.5">
+				<button
+					type="button"
+					disabled={tool.state === "running"}
+					onClick={handleSceneClick}
+					className={cn(
+						"flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs text-left transition-colors",
+						tool.state === "running"
+							? "border-border/60 bg-muted/30 cursor-default"
+							: isError
+								? "border-red-500/20 bg-red-500/5 hover:bg-red-500/10 cursor-pointer"
+								: "border-border/60 bg-muted/40 hover:bg-accent/50 hover:border-border cursor-pointer",
+					)}
+				>
+					<div className={cn(
+						"flex size-7 items-center justify-center rounded-lg flex-shrink-0 transition-colors",
+						tool.state === "running"
+							? "bg-muted text-muted-foreground"
+							: isError
+								? "bg-red-500/10 text-red-500"
+								: "bg-foreground/5 text-foreground/70",
+					)}>
+						{tool.state === "running" ? (
+							<Loader2Icon className="size-3.5 animate-spin" />
+						) : isError ? (
+							<RotateCcwIcon className="size-3.5" />
+						) : (
+							<FilmIcon className="size-3.5" />
+						)}
+					</div>
+					<div className="flex-1 min-w-0">
+						<div className={cn("font-medium truncate", isError ? "text-red-500/90" : "text-foreground/90")}>
+							{display.label}
+						</div>
+						<div className="text-[10px] text-muted-foreground/60 mt-0.5">
+							{tool.state === "running"
+								? (display.isEdit ? "Updating scene..." : "Creating scene...")
+								: isError
+									? "Failed — click to retry"
+									: display.isEdit
+										? "Scene updated"
+										: display.sceneDuration
+											? `Scene · ${display.sceneDuration}`
+											: "Scene created"}
+						</div>
+					</div>
+					{display.sceneDuration && isReady && (
+						<span className="text-[11px] text-muted-foreground/50 tabular-nums flex-shrink-0">
+							{display.sceneDuration}
+						</span>
+					)}
+					{isReady && (
+						<PlayIcon className="size-3 text-muted-foreground/40 flex-shrink-0" />
+					)}
+				</button>
+			</div>
+		);
+	}
+
+	// Default tool card
 	return (
 		<div className="my-1">
 			<button
@@ -148,9 +309,9 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 				)}
 			>
 				{stateIcon}
-				<span className="text-muted-foreground">{icon}</span>
+				<span className="text-muted-foreground">{display.icon}</span>
 				<span className="min-w-0 flex-1 truncate font-mono text-foreground/80">
-					{label}
+					{display.label}
 				</span>
 				{hasOutput && (
 					<ChevronRightIcon
@@ -294,11 +455,74 @@ const AssistantMessage = memo(function AssistantMessage({
 /*  Suggested prompts                                                  */
 /* ------------------------------------------------------------------ */
 
-const SUGGESTIONS = [
-	"A 15s logo reveal animation with particles",
-	"A kinetic typography intro for a tech brand",
-	"A data visualization with animated bar charts",
-	"A 30s product showcase with scene transitions",
+interface Suggestion {
+	icon: typeof SparklesIcon;
+	label: string;
+	desc: string;
+	prompt: string;
+}
+
+const SUGGESTIONS: Suggestion[] = [
+	{
+		icon: BookOpenIcon,
+		label: "Philosophy of time",
+		desc: "5-min animated essay on how humans perceive time",
+		prompt: "Create a 5-minute animated essay about the philosophy of time — start with ancient Greek concepts of Chronos vs Kairos, transition to Einstein's relativity bending our intuition, then end with how digital culture compresses our sense of time. Use elegant typography, slow cinematic transitions between scenes, and a dark navy background with gold accents.",
+	},
+	{
+		icon: HeartIcon,
+		label: "Art history journey",
+		desc: "3-min visual tour from Renaissance to street art",
+		prompt: "Make a 3-minute visual journey through art history — begin with Renaissance masterpieces (warm candlelit palette), move through Impressionism (soft pastels, light brushstrokes), into Bauhaus & modernism (bold geometry), and close with contemporary street art (vibrant neons). Each era gets its own scene with smooth style transitions. Include era names and key artist references as animated text overlays.",
+	},
+	{
+		icon: GraduationCapIcon,
+		label: "How memory works",
+		desc: "4-min explainer on the science of remembering",
+		prompt: "Build a 4-minute educational video explaining how human memory works — scene 1: sensory memory with fleeting visual sparks, scene 2: short-term memory as a small glowing workspace, scene 3: long-term memory as a vast library with neural pathway animations, scene 4: why we forget (decay and interference visualized). Use a clean, minimal style with soft blues and whites. Each concept should have animated diagrams.",
+	},
+	{
+		icon: ClapperboardIcon,
+		label: "History of cinema",
+		desc: "6-min journey from silent films to streaming",
+		prompt: "Create a 6-minute documentary-style video on the history of cinema — start with the Lumière brothers and silent film era (sepia, film grain), move to golden age Hollywood (black and white glamour), the New Wave revolution (handheld, experimental cuts), blockbuster era (bold primary colors, wide compositions), and end with the streaming age (glowing screens, infinite scroll). Use cinematic title cards between eras with year markers.",
+	},
+	{
+		icon: MusicIcon,
+		label: "Evolution of music",
+		desc: "5-min from classical to electronic music",
+		prompt: "Make a 5-minute animated timeline of music evolution — start with classical orchestras (flowing waveforms, warm amber), move through jazz (smoky purple, improvisation patterns), rock & roll (electric red, guitar wave distortions), hip-hop (geometric beats, street-art graffiti style), and end with electronic music (neon synthwave grids, pulsing frequencies). Each genre should have its own visual language and color palette.",
+	},
+	{
+		icon: SparklesIcon,
+		label: "The overview effect",
+		desc: "2-min meditation on seeing Earth from space",
+		prompt: "Create a 2-minute contemplative video about the overview effect — the cognitive shift astronauts experience seeing Earth from space. Start close on everyday human life (warm, textured), slowly pull back through atmosphere layers (increasingly cool and ethereal), arrive at the full Earth view (deep black, blue marble), then show astronaut quotes fading in as gentle typography. Slow, breathing pace. Dark space background with soft lens flares.",
+	},
+	{
+		icon: TrendingUpIcon,
+		label: "Rise of ancient Rome",
+		desc: "8-min animated historical epic",
+		prompt: "Build an 8-minute animated history of ancient Rome — scene 1: founding myths and the monarchy (earthy terracotta palette), scene 2: the Republic and expansion (marble white and bronze), scene 3: Julius Caesar and civil war (dramatic red and shadow), scene 4: the Empire at its peak (gold and imperial purple), scene 5: decline and fall (crumbling textures, fading colors). Use map animations for territorial changes, timeline markers for key dates, and dramatic typography for chapter titles.",
+	},
+	{
+		icon: BriefcaseIcon,
+		label: "Future of work",
+		desc: "3-min essay on AI and human creativity",
+		prompt: "Create a 3-minute animated essay about the future of work — scene 1: the industrial revolution and assembly lines (monochrome, mechanical), scene 2: the knowledge economy and cubicles (flat corporate pastels), scene 3: AI disruption and automation (glitch effects, neural networks), scene 4: a hopeful vision of human-AI collaboration focused on creativity (warm gradients, organic shapes merging with digital). Clean modern typography throughout.",
+	},
+	{
+		icon: RocketIcon,
+		label: "Pale blue dot",
+		desc: "1-min Sagan-inspired cosmic perspective",
+		prompt: "Make a 1-minute video inspired by Carl Sagan's Pale Blue Dot — start with a close-up of Earth, then slowly zoom out past the Moon, Mars, Jupiter, Saturn's rings, until Earth is just a tiny speck in a sunbeam. Use deep space blacks and subtle star fields. Overlay key phrases from the speech as elegant, slowly fading white text. End on silence and the pale blue dot. Cinematic, reverent, slow.",
+	},
+	{
+		icon: ShoppingBagIcon,
+		label: "Psychology of color",
+		desc: "4-min visual exploration of color and emotion",
+		prompt: "Create a 4-minute video about the psychology of color — each scene focuses on one color: red (passion, danger — pulsing visuals), blue (trust, calm — flowing water motifs), yellow (joy, energy — radiating sunbursts), green (nature, growth — organic shapes), purple (luxury, mystery — deep velvet textures). Include cultural context (how different cultures interpret colors differently). Smooth transitions where colors morph into the next.",
+	},
 ];
 
 /* ------------------------------------------------------------------ */
@@ -343,6 +567,20 @@ function AttachmentPreviews() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Auto-scroll when new messages arrive                               */
+/* ------------------------------------------------------------------ */
+
+function ScrollOnNewMessage({ count }: { count: number }) {
+	const { scrollToBottom } = useStickToBottomContext();
+	const prev = useRef(count);
+	useEffect(() => {
+		if (count > prev.current) scrollToBottom();
+		prev.current = count;
+	}, [count, scrollToBottom]);
+	return null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  ChatPanel                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -367,6 +605,18 @@ export function ChatPanel() {
 		return () => clearTimeout(clearTimerRef.current);
 	}, []);
 
+	// Listen for retry-scene from error scene cards
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { filename, error } = (e as CustomEvent).detail || {};
+			if (filename && error) {
+				send(`Fix the error in ${filename}:\n${error}`);
+			}
+		};
+		window.addEventListener("studio:retry-scene", handler);
+		return () => window.removeEventListener("studio:retry-scene", handler);
+	}, [send]);
+
 	const slashMenu = useSlashCommandMenu(send, {
 		models: AVAILABLE_MODELS,
 		currentModel,
@@ -389,6 +639,13 @@ export function ChatPanel() {
 				? "error"
 				: "ready";
 
+	// Pick 4 random suggestions (stable per mount)
+	const visibleSuggestions = useMemo(() => {
+		const shuffled = [...SUGGESTIONS].sort(() => Math.random() - 0.5);
+		return shuffled.slice(0, 4);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	// Build checkpoint index: track which user messages have entryIds
 	const checkpointUserIndices = useMemo(() => {
 		const indices: Array<{ msgIndex: number; entryId: string; cpIndex: number }> = [];
@@ -405,31 +662,33 @@ export function ChatPanel() {
 
 	return (
 		<div className="flex flex-col h-full bg-background">
-			<Conversation className="flex-1 relative">
+			<Conversation className="flex-1 relative chat-scroll">
+				<ScrollOnNewMessage count={messages.length} />
 				<ConversationContent className="gap-6 px-4 py-6">
 					{/* Empty state */}
 					{messages.length === 0 && (
-						<div className="flex flex-col items-center justify-center h-full gap-5 text-center">
-							<div className="flex size-10 items-center justify-center rounded-full bg-foreground/5">
-								<SparklesIcon className="size-5 text-foreground/50" />
-							</div>
-							<div className="space-y-1.5">
-								<p className="text-base font-medium text-foreground">
-									What would you like to build?
+						<div className="flex flex-col items-center justify-center h-full gap-6 text-center">
+							<div className="space-y-2">
+								<p className="text-lg font-medium text-foreground">
+									What story do you want to tell?
 								</p>
 								<p className="text-sm text-muted-foreground">
-									Describe your project and I&apos;ll create it for you.
+									Describe your video — I&apos;ll bring it to life.
 								</p>
 							</div>
-							<div className="flex flex-wrap justify-center gap-2 max-w-sm">
-								{SUGGESTIONS.map((prompt) => (
+							<div className="grid grid-cols-2 gap-2.5 w-full max-w-md">
+								{visibleSuggestions.map((s) => (
 									<button
-										key={prompt}
+										key={s.label}
 										type="button"
-										onClick={() => send(prompt)}
-										className="px-3 py-1.5 text-xs rounded-full border border-border/60 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+										onClick={() => send(s.prompt)}
+										className="flex flex-col items-start gap-1.5 p-3 rounded-xl border border-border/60 text-left hover:bg-accent/50 hover:border-border transition-colors group"
 									>
-										{prompt}
+										<div className="flex items-center gap-2">
+											<s.icon className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+											<span className="text-xs font-medium text-foreground">{s.label}</span>
+										</div>
+										<span className="text-[11px] text-muted-foreground/70 leading-snug">{s.desc}</span>
 									</button>
 								))}
 							</div>

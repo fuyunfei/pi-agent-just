@@ -79,18 +79,8 @@ export async function POST(req: Request) {
 					} else if (inner.type === "thinking_end") {
 						enqueue({ type: "reasoning-end" });
 					}
-					// Tool call streaming
-					else if (inner.type === "toolcall_start") {
-						// Card appears immediately with spinner
-						const item = (inner.partial as any).content?.[inner.contentIndex];
-						if (item?.id && item?.name) {
-							enqueue({
-								type: "tool-call-started",
-								toolCallId: item.id,
-								toolName: item.name,
-							});
-						}
-					} else if (inner.type === "toolcall_end") {
+					// Tool call streaming — args captured for logging
+					else if (inner.type === "toolcall_end") {
 						const tc = inner.toolCall;
 						toolArgs.set(tc.id, tc.arguments as Record<string, unknown>);
 						enqueue({
@@ -100,6 +90,16 @@ export async function POST(req: Request) {
 							input: tc.arguments,
 						});
 					}
+				}
+
+				// Tool execution start — card with args before execution completes
+				if (event.type === "tool_execution_start") {
+					enqueue({
+						type: "tool-call-started",
+						toolCallId: event.toolCallId,
+						toolName: event.toolName,
+						input: event.args,
+					});
 				}
 
 				// Tool execution results

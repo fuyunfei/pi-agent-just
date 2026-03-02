@@ -296,18 +296,24 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}));
 	}, [sceneIndex]);
 
-	// Listen for scene selection from sidebar
+	// Listen for scene selection from sidebar or chat
 	useEffect(() => {
 		const handler = (e: Event) => {
-			const idx = (e as CustomEvent).detail?.index;
-			if (typeof idx === "number" && idx >= 0 && idx < compiled.length) {
+			const detail = (e as CustomEvent).detail;
+			let idx: number | undefined;
+			if (typeof detail?.index === "number") {
+				idx = detail.index;
+			} else if (typeof detail?.filename === "string") {
+				idx = compiled.findIndex((s) => s.filename === detail.filename);
+			}
+			if (idx != null && idx >= 0 && idx < compiled.length) {
 				setCurrentIndex(idx);
 				setCurrentFrame(0);
 			}
 		};
 		window.addEventListener("studio:scene-select", handler);
 		return () => window.removeEventListener("studio:scene-select", handler);
-	}, [compiled.length]);
+	}, [compiled]);
 
 	// Track frame updates — re-attach when Player remounts (playerKey changes)
 	useEffect(() => {
@@ -325,6 +331,12 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			player.removeEventListener("pause", onPause);
 		};
 	}, [playerKey]);
+
+	// Remount Player when scene index changes (ensures autoPlay fires for new scene)
+	useEffect(() => {
+		keyRef.current += 1;
+		setPlayerKey(keyRef.current);
+	}, [sceneIndex]);
 
 	// Auto-advance on scene end
 	useEffect(() => {
