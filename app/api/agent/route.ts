@@ -158,11 +158,17 @@ export async function POST(req: Request) {
 				}
 			});
 
+			// If agent is still running (e.g. client disconnected mid-stream), abort first
+			const startPrompt = async () => {
+				if (session.isStreaming) {
+					await session.abort();
+				}
+				const promptOpts = images?.length ? { images } : undefined;
+				return session.prompt(promptText, promptOpts);
+			};
+
 			// Fire the prompt (don't await — events stream via subscribe)
-			const promptOpts: Record<string, unknown> = {};
-			if (images?.length) promptOpts.images = images;
-			if (session.isStreaming) promptOpts.streamingBehavior = "followUp";
-			session.prompt(promptText, promptOpts).catch((err) => {
+			startPrompt().catch((err) => {
 				const msg = err instanceof Error ? err.message : String(err);
 				console.log(`[route] error: ${msg}`);
 				enqueue({
