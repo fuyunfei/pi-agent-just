@@ -421,10 +421,22 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	}
 
 	if (compiled.length === 0 && error) {
+		const sendFix = () => {
+			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+				detail: { filename: scenes[0]?.filename || "scene", error },
+			}));
+		};
 		return (
-			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }} className="studio-surface">
-				<div style={{ color: "#ff6b6b", fontSize: 15, fontFamily: "system-ui" }}>Compilation Error</div>
-				<div style={{ color: "#aaa", fontSize: 13, fontFamily: "monospace", textAlign: "center", maxWidth: "90%", wordBreak: "break-word", whiteSpace: "pre-wrap" }}>{error}</div>
+			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }} className="studio-surface">
+				<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "system-ui" }}>Compilation Error</div>
+				<div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word", whiteSpace: "pre-wrap", maxHeight: 120, overflow: "auto" }}>{error}</div>
+				<button
+					type="button"
+					onClick={sendFix}
+					style={{ padding: "6px 16px", fontSize: 12, fontFamily: "system-ui", color: "#ff6b6b", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: 8, cursor: "pointer" }}
+				>
+					Ask AI to fix
+				</button>
 			</div>
 		);
 	}
@@ -436,14 +448,16 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	const globalFrame = offsets[sceneIndex] + currentFrame;
 	const fps = current.config.fps;
 
+	const sendFixPartial = () => {
+		if (error) {
+			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+				detail: { filename: scenes[0]?.filename || "scene", error },
+			}));
+		}
+	};
+
 	return (
 		<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} className="studio-surface">
-			{error && (
-				<div style={{ padding: "6px 16px", fontSize: 11, fontFamily: "monospace", color: "#ff6b6b", background: "rgba(255,107,107,0.08)", whiteSpace: "pre-wrap", maxHeight: 60, overflow: "auto", width: "100%" }}>
-					{error}
-				</div>
-			)}
-
 			{/* Video area — click to play/pause */}
 			<div
 				style={{
@@ -453,6 +467,27 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				}}
 				onClick={togglePlay}
 			>
+				{/* Partial error overlay — inside the video */}
+				{error && (
+					<div
+						onClick={(e) => e.stopPropagation()}
+						style={{
+							position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 20,
+							padding: "8px 12px", display: "flex", alignItems: "center", gap: 8,
+							fontSize: 11, fontFamily: "monospace", color: "#ff6b6b",
+							background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)",
+						}}
+					>
+						<span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{error}</span>
+						<button
+							type="button"
+							onClick={sendFixPartial}
+							style={{ padding: "3px 10px", fontSize: 11, fontFamily: "system-ui", color: "#ff6b6b", background: "rgba(255,107,107,0.15)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+						>
+							Fix
+						</button>
+					</div>
+				)}
 				{/* Play/Pause indicator */}
 				{showPlayIcon && (
 					<div style={{
