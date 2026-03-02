@@ -35,92 +35,77 @@ export const CMD_GITHUB = "https://github.com/niclas-niclas/pi-agent-just\n";
 // File contents (generated from repo)
 export const FILE_README = `# pi-agent-just
 
-Browser-based AI coding playground. AI creates files in a sandboxed virtual filesystem — you browse, preview, and download.
+English | [中文](./README.zh-CN.md)
 
-Built on [just-bash](https://github.com/vercel-labs/just-bash) for secure sandboxed execution and [pi-coding-agent](https://github.com/niclas-niclas/pi-coding-agent) for the AI agent runtime.
+A browser-based AI coding playground that fuses two independent systems — [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) (AI agent runtime) and [just-bash](https://github.com/niclas-niclas/just-bash) (TypeScript bash interpreter with in-memory filesystem) — into a single sandboxed environment where AI writes and executes real code, entirely in memory.
+
+## Why this matters
+
+Most AI coding tools either generate code as text (no execution) or require a real OS-level sandbox (Docker, VM, WASM). This project takes a third path:
+
+**The AI agent gets a real bash shell and filesystem, but everything runs in-process in pure TypeScript.** No containers, no WASM, no system calls. The agent can \`write\` a file, \`bash\` run a script, \`grep\` through results — the same workflow a human developer uses — but the entire execution happens in a JavaScript runtime. Files exist only in memory. The sandbox is zero-cost to create, instant to snapshot, and trivial to rollback.
+
+This is made possible by the adapter layer between the two systems:
+
+\`\`\`
+pi-coding-agent                    just-bash
+┌─────────────────┐               ┌─────────────────┐
+│  AgentSession   │               │    OverlayFs    │
+│  ┌───────────┐  │   adapters    │  (in-memory VFS) │
+│  │ bash tool │──┼───────────────┼──▶ Bash          │
+│  │ read tool │──┼───────────────┼──▶ readFile      │
+│  │ write tool│──┼───────────────┼──▶ writeFile     │
+│  │ edit tool │──┼───────────────┼──▶ read+write    │
+│  │ ls tool   │──┼───────────────┼──▶ readdir+stat  │
+│  │ find tool │──┼───────────────┼──▶ glob walk     │
+│  │ grep tool │──┼───────────────┼──▶ readFile      │
+│  └───────────┘  │               └─────────────────┘
+│  Model, Session,│
+│  Compaction,    │
+│  Context mgmt   │
+└─────────────────┘
+\`\`\`
+
+Each pi-coding-agent tool defines an **operations interface** (\`BashOperations\`, \`ReadOperations\`, etc.). The adapter functions in \`singleton.ts\` implement these interfaces by delegating to just-bash's \`OverlayFs\` and \`Bash\` classes. The agent doesn't know it's running in a virtual filesystem — it uses the same tools it would use on a real system.
 
 ## Architecture
 
 \`\`\`
-┌──────────────────────────────────────┬────────────────────┐
-│  [◨]  4 files        [Download][Clear] │                    │
-├──[index.ts]──[App.tsx]──[preview]─────┤                    │
-│┌────────┬────────────────────────────┐│  Terminal          │
-││ src/   │  1│ import { useState }    ││  (AI chat + bash)  │
-││  index │  2│ from "react";          ││                    │
-││  App   │  3│                        ││                    │
-││        │  4│ export default ...     ││                    │
-│└────────┴────────────────────────────┘│                    │
-└──────────────────────────────────────┴────────────────────┘
+Browser                              Server (Next.js)
+┌──────────────────────────────┐    ┌──────────────────────────────┐
+│                              │    │                              │
+│  Code Studio    │  Chat      │    │  /api/agent (SSE stream)     │
+│  ┌────────────┐ │            │    │    │                         │
+│  │ File Tree  │ │  Messages  │    │    ▼                         │
+│  │ (sidebar)  │ │  + Tools   │◀──▶│  AgentSession (singleton)   │
+│  ├────────────┤ │  + Slash   │ SSE│    │                         │
+│  │ Code View  │ │  Commands  │    │    ├─ Agent loop (LLM calls) │
+│  │ (Shiki)    │ │            │    │    ├─ Tool execution          │
+│  ├────────────┤ │  Token/    │    │    └─ Context management     │
+│  │ Preview    │ │  Cost      │    │                              │
+│  │ (iframe/   │ │  Tracking  │    │  OverlayFs + Bash            │
+│  │  Sandpack) │ │            │    │  (pure in-memory sandbox)    │
+│  └────────────┘ │            │    │                              │
+└──────────────────────────────┘    └──────────────────────────────┘
 \`\`\`
 
-**Left panel** — Code Studio. Tabbed file viewer with Shiki syntax highlighting, live HTML preview, markdown rendering, JSON formatting. File tree sidebar with change indicators.
+The server maintains a **singleton** that persists across requests: one \`OverlayFs\` instance, one \`Bash\` instance, one \`AgentSession\`. Each user message triggers an agent loop that may invoke multiple tools, all operating on the same in-memory filesystem. The browser polls for file changes and renders them in real-time.
 
-**Right panel** — Terminal with AI agent. Chat naturally or run bash commands directly. Commands execute in a sandboxed virtual filesystem.
+### Filesystem snapshots
 
-**Sandbox** — All file operations happen in a pure in-memory OverlayFS. Click **Download** to export files as a ZIP. Click **Clear** to reset the session.
+Every agent turn, the \`OverlayFs\` state is snapshotted and keyed by session entry ID. Users can rollback to any previous checkpoint — both the conversation history and the filesystem state are restored atomically. This is only practical because the filesystem is pure data structures in memory.
 
 ## Quick Start
 
 \`\`\`bash
-# Install dependencies
 pnpm install
 
-# Set API key in .env.local
+# Set API key
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
-# or
-echo "OPENROUTER_API_KEY=sk-or-..." > .env.local
+# or: OPENROUTER_API_KEY=sk-or-...
 
-# Start dev server
 pnpm dev
 \`\`\`
-
-## How It Works
-
-### Agent API (\`/api/agent\`)
-
-POST endpoint that streams SSE events from the AI agent. The agent has access to sandboxed tools:
-
-| Tool | Description |
-|------|-------------|
-| \`bash\` | Run commands in the virtual bash environment |
-| \`read\` | Read files from the overlay filesystem |
-| \`write\` | Create/overwrite files (in-memory) |
-| \`edit\` | Edit existing files with string replacement |
-| \`ls\` | List directory contents |
-
-### Sandbox API (\`/api/sandbox\`)
-
-| Method | Description |
-|--------|-------------|
-| \`GET /api/sandbox\` | List all overlay changes (created/modified/deleted files) |
-| \`POST /api/sandbox\` \`{action:"clear"}\` | Reset the session (destroy sandbox + agent state) |
-
-### Code Studio
-
-- **Syntax highlighting** — Shiki with github-dark/github-light themes, 15+ languages
-- **Live preview** — HTML (sandboxed iframe), Markdown, SVG, JSON
-- **File tree** — Auto-collapsing single-child directories, change type indicators (+/~/-)
-- **Tabs** — Middle-click close, Cmd+W close, Cmd+[ / Cmd+] cycle, Cmd+B toggle sidebar
-- **Draggable splitter** — Resize studio and terminal panels
-- **Download** — Export all files as ZIP (browser-side, no server dependency)
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| \`ANTHROPIC_API_KEY\` | — | Anthropic API key |
-| \`OPENROUTER_API_KEY\` | — | OpenRouter API key (takes priority) |
-| \`PI_MODEL\` | \`claude-haiku-4.5\` | Model ID |
-
-## Tech Stack
-
-- **Next.js 16** (App Router, Turbopack)
-- **just-bash** — TypeScript bash interpreter + OverlayFS
-- **pi-coding-agent** — AI agent session with tool use
-- **Shiki 4** — Syntax highlighting (browser bundle, no WASM)
-- **Tailwind CSS 4** — Styling with CSS custom properties for theming
-- **React 19** — UI
 
 ## License
 

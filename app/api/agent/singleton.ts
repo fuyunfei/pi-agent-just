@@ -4,7 +4,7 @@
  */
 
 import { Bash, OverlayFs, type FsSnapshot } from "just-bash";
-import { mkdtempSync } from "fs";
+import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { join, relative } from "path";
 import { tmpdir } from "os";
 import { minimatch } from "minimatch";
@@ -35,6 +35,48 @@ import { getModel } from "@mariozechner/pi-ai";
 
 // Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
+
+// ---------------------------------------------------------------------------
+// Persist / restore OverlayFs snapshot to /tmp so files survive cold starts
+// ---------------------------------------------------------------------------
+const SNAPSHOT_PATH = join(tmpdir(), "pi-sandbox-snapshot.json");
+
+interface SerializedEntry {
+	type: "file" | "directory";
+	content?: string; // base64 for files
+	mode: number;
+	mtime: string;
+}
+
+function persistSnapshot(snap: FsSnapshot) {
+	try {
+		const memory: Record<string, SerializedEntry> = {};
+		for (const [path, entry] of snap.memory) {
+			if (entry.type === "symlink") continue; // symlinks disabled in sandbox
+			const se: SerializedEntry = { type: entry.type, mode: entry.mode, mtime: entry.mtime.toISOString() };
+			if (entry.type === "file") se.content = Buffer.from(entry.content).toString("base64");
+			memory[path] = se;
+		}
+		writeFileSync(SNAPSHOT_PATH, JSON.stringify({ memory, deleted: [...snap.deleted] }));
+	} catch { /* ignore write errors */ }
+}
+
+function loadPersistedSnapshot(): FsSnapshot | null {
+	try {
+		const raw = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf-8"));
+		const memory = new Map<string, import("just-bash").MemoryEntry>();
+		for (const [path, se] of Object.entries(raw.memory) as [string, SerializedEntry][]) {
+			if (se.type === "file") {
+				memory.set(path, { type: "file", content: Buffer.from(se.content!, "base64"), mode: se.mode, mtime: new Date(se.mtime) });
+			} else {
+				memory.set(path, { type: "directory", mode: se.mode, mtime: new Date(se.mtime) });
+			}
+		}
+		return { memory, deleted: new Set(raw.deleted || []) };
+	} catch {
+		return null;
+	}
+}
 
 const SYSTEM_PROMPT = `You are an expert frontend engineer in a browser-based sandbox playground.
 
@@ -193,6 +235,14 @@ export function getOrCreateSingleton() {
 
 	// --- Sandbox setup (writes allowed, stay in memory) ---
 	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
+
+	// Restore files from /tmp if this is a cold start
+	const persisted = loadPersistedSnapshot();
+	if (persisted) {
+		overlayFs.restore(persisted);
+		console.log(`[agent] Restored ${persisted.memory.size} entries from /tmp snapshot`);
+	}
+
 	const mountPoint = overlayFs.getMountPoint();
 	const bash = new Bash({ fs: overlayFs, cwd: mountPoint });
 
@@ -250,7 +300,8 @@ export function getOrCreateSingleton() {
 		getApiKey: async () => apiKey,
 	});
 
-	const sessionManager = SessionManager.inMemory();
+	const sessionDir = join(tmpdir(), "pi-session");
+	const sessionManager = SessionManager.create(mountPoint, sessionDir);
 	const settingsManager = SettingsManager.inMemory({
 		compaction: { enabled: true },
 	});
@@ -348,8 +399,15 @@ export async function compactSession() {
 	};
 }
 
+/** Persist current OverlayFs state to /tmp for cold-start recovery. */
+export function persistCurrentSnapshot() {
+	if (!singleton) return;
+	persistSnapshot(singleton.overlayFs.snapshot());
+}
+
 /** Destroy the current session — next getOrCreateSingleton() creates a fresh one. */
 export function resetSingleton() {
 	singleton = null;
+	try { unlinkSync(SNAPSHOT_PATH); } catch { /* ignore if missing */ }
 	console.log("[agent] Session singleton reset");
 }

@@ -13,13 +13,58 @@ type UIMessage = {
 let messageId = 0;
 const nextId = () => `msg-${++messageId}`;
 
+const STORAGE_KEY = "pi-agent-chat";
+
+function loadPersistedState(): {
+	messages: ChatMessage[];
+	history: UIMessage[];
+	usage: SessionUsage | null;
+} | null {
+	try {
+		const raw = localStorage.getItem(STORAGE_KEY);
+		if (!raw) return null;
+		const data = JSON.parse(raw);
+		const messages = (data.messages || []).map((m: ChatMessage) => ({
+			...m,
+			isStreaming: false,
+			isReasoningStreaming: false,
+		}));
+		return { messages, history: data.history || [], usage: data.usage || null };
+	} catch {
+		return null;
+	}
+}
+
 export function useChatAgent() {
-	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const initRef = useRef<ReturnType<typeof loadPersistedState>>(undefined);
+	if (initRef.current === undefined) {
+		initRef.current = loadPersistedState();
+		// Restore messageId counter to avoid collisions
+		if (initRef.current) {
+			for (const m of initRef.current.messages) {
+				const n = parseInt(m.id.replace("msg-", ""), 10);
+				if (n > messageId) messageId = n;
+			}
+		}
+	}
+	const init = initRef.current;
+
+	const [messages, setMessages] = useState<ChatMessage[]>(init?.messages ?? []);
 	const [status, setStatus] = useState<"ready" | "streaming" | "error">("ready");
 	const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
-	const [usage, setUsage] = useState<SessionUsage | null>(null);
-	const historyRef = useRef<UIMessage[]>([]);
+	const [usage, setUsage] = useState<SessionUsage | null>(init?.usage ?? null);
+	const historyRef = useRef<UIMessage[]>(init?.history ?? []);
 	const abortRef = useRef<AbortController | null>(null);
+
+	// Persist messages + history to localStorage
+	useEffect(() => {
+		try {
+			localStorage.setItem(
+				STORAGE_KEY,
+				JSON.stringify({ messages, history: historyRef.current, usage }),
+			);
+		} catch { /* quota exceeded — ignore */ }
+	}, [messages, usage]);
 
 	// Fetch current model on mount
 	useEffect(() => {
@@ -68,6 +113,7 @@ export function useChatAgent() {
 			if (cmd === "new") {
 				setMessages([]);
 				setUsage(null);
+				localStorage.removeItem(STORAGE_KEY);
 				historyRef.current = [];
 				fetch("/api/sandbox", {
 					method: "POST",
@@ -426,6 +472,7 @@ export function useChatAgent() {
 		setMessages([]);
 		setUsage(null);
 		historyRef.current = [];
+		localStorage.removeItem(STORAGE_KEY);
 		fetch("/api/sandbox", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },

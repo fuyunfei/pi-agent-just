@@ -3,7 +3,7 @@
  */
 
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { getOrCreateSingleton, getSessionStats } from "./singleton";
+import { getOrCreateSingleton, getSessionStats, persistCurrentSnapshot } from "./singleton";
 
 // ---------------------------------------------------------------------------
 // SSE helpers
@@ -124,6 +124,8 @@ export async function POST(req: Request) {
 					if (leafId) {
 						fsCheckpoints.set(leafId, overlayFs.snapshot());
 					}
+					// Persist to /tmp so files survive cold starts
+					persistCurrentSnapshot();
 					const usage = getSessionStats();
 					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage });
 					try {
