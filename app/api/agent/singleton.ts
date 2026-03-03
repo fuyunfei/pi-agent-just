@@ -146,41 +146,65 @@ From "@remotion/three" + "three":
 
 React hooks: useState, useEffect, useMemo, useRef, useCallback
 
-### Reference example — study this for quality and structure
+### Reference example — study this carefully
 
 \`\`\`tsx
 // @remotion fps:30 duration:450
 import { useCurrentFrame, useVideoConfig, AbsoluteFill, interpolate, spring, Sequence } from "remotion";
-import { Circle, Rect } from "@remotion/shapes";
 
 const Title = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const scale = spring({ frame, fps, config: { damping: 12, stiffness: 100 } });
   const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
+  const y = interpolate(frame, [0, 25], [40, 0], { extrapolateRight: "clamp" });
   return (
-    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-      <h1 style={{ fontSize: 100, fontFamily: "Inter, sans-serif", color: "#fff", opacity, transform: \`scale(\${scale})\` }}>
-        Motion Graphics
-      </h1>
+    <AbsoluteFill className="flex items-center justify-center">
+      <div style={{ opacity, transform: \`scale(\${scale}) translateY(\${y}px)\` }}>
+        <h1 className="text-[120px] font-bold tracking-tight text-white" style={{ fontFamily: "Playfair Display, serif" }}>
+          Deeper
+        </h1>
+        <div className="h-1 bg-indigo-500 mx-auto mt-4" style={{ width: interpolate(frame, [15, 40], [0, 200], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }} />
+      </div>
     </AbsoluteFill>
   );
 };
 
-const ShapesScene = () => {
+const QuoteScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const COLOR_PRIMARY = "#4f46e5";
-  const COLOR_ACCENT = "#f59e0b";
-  const circleScale = spring({ frame, fps, delay: 10, config: { damping: 8 } });
-  const rectRotation = interpolate(frame, [0, 90], [0, 360], { extrapolateRight: "clamp" });
+  const words = ["The", "only", "way", "out", "is", "through."];
   return (
-    <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", gap: 80, flexDirection: "row" }}>
-      <div style={{ transform: \`scale(\${circleScale})\` }}>
-        <Circle radius={120} fill={COLOR_PRIMARY} />
+    <AbsoluteFill className="flex items-center justify-center bg-zinc-950">
+      <div className="flex gap-4 flex-wrap justify-center max-w-4xl px-20">
+        {words.map((word, i) => {
+          const delay = i * 6;
+          const wordOpacity = interpolate(frame, [delay, delay + 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+          const wordY = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 15 } });
+          return (
+            <span key={i} className="text-6xl font-light text-white" style={{ fontFamily: "Space Grotesk, sans-serif", opacity: wordOpacity, transform: \`translateY(\${(1 - wordY) * 30}px)\` }}>
+              {word}
+            </span>
+          );
+        })}
       </div>
-      <div style={{ transform: \`rotate(\${rectRotation}deg)\` }}>
-        <Rect width={200} height={200} fill={COLOR_ACCENT} cornerRadius={20} />
+    </AbsoluteFill>
+  );
+};
+
+const EndScene = () => {
+  const frame = useCurrentFrame();
+  const pulse = interpolate(Math.sin(frame / 8), [-1, 1], [0.9, 1.1]);
+  const glow = interpolate(Math.sin(frame / 8), [-1, 1], [10, 30]);
+  return (
+    <AbsoluteFill className="flex items-center justify-center bg-black">
+      <div className="text-center" style={{ transform: \`scale(\${pulse})\` }}>
+        <div className="text-8xl font-black text-indigo-400" style={{ fontFamily: "Outfit, sans-serif", textShadow: \`0 0 \${glow}px rgba(99,102,241,0.6)\` }}>
+          FIN
+        </div>
+        <p className="text-zinc-500 text-lg mt-6 tracking-[0.3em] uppercase" style={{ fontFamily: "Space Mono, monospace" }}>
+          Thank you for watching
+        </p>
       </div>
     </AbsoluteFill>
   );
@@ -188,22 +212,22 @@ const ShapesScene = () => {
 
 export const MyAnimation = () => {
   return (
-    <AbsoluteFill style={{ backgroundColor: "#0a0a0a" }}>
+    <AbsoluteFill className="bg-zinc-950">
       <Sequence from={0} durationInFrames={150}><Title /></Sequence>
-      <Sequence from={150} durationInFrames={150}><ShapesScene /></Sequence>
-      <Sequence from={300} durationInFrames={150}><Title /></Sequence>
+      <Sequence from={150} durationInFrames={150}><QuoteScene /></Sequence>
+      <Sequence from={300} durationInFrames={150}><EndScene /></Sequence>
     </AbsoluteFill>
   );
 };
 \`\`\`
 
-Key patterns from this example:
-- Scene components defined outside the export, each with their own animations
-- \`spring()\` with config for organic motion, \`interpolate()\` with clamp for linear
-- Constants (colors) as UPPER_SNAKE_CASE inside components
-- Staggered delays via \`delay\` param in spring
-- \`<Sequence>\` for scene timing — each scene is 5 seconds (150 frames)
-- Background set on root AbsoluteFill from frame 0
+Key patterns:
+- **Tailwind for layout/typography** (\`className\`), **inline style for animated values** (\`opacity\`, \`transform\`)
+- \`spring()\` for organic motion, \`interpolate()\` with clamp for linear — never raw \`frame / N\`
+- Multiple fonts mixed: Playfair Display (titles), Space Grotesk (body), Outfit (display), Space Mono (mono)
+- Word-by-word staggered reveals using \`delay = i * N\`
+- Pulsing/glowing effects via \`Math.sin(frame / speed)\`
+- Each \`<Sequence>\` is a full-screen scene with its own \`AbsoluteFill\`
 
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`
