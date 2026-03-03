@@ -8,6 +8,7 @@ import {
 	useContext,
 	useEffect,
 	useReducer,
+	useRef,
 	useState,
 } from "react";
 import type { OverlayChange, StudioTab } from "./types";
@@ -133,9 +134,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 	const [state, dispatch] = useReducer(studioReducer, initialState);
 	const [loaded, setLoaded] = useState(false);
 
+	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+	const fetchIdRef = useRef(0);
+
 	const refresh = useCallback(async () => {
+		const id = ++fetchIdRef.current;
 		try {
 			const res = await fetch("/api/sandbox");
+			if (id !== fetchIdRef.current) return; // stale response, discard
 			const data = await res.json();
 			console.log(`[refresh] changes=${data.changes?.length ?? 0} mountPoint=${data.mountPoint ?? ""}`);
 			if (data.changes) {
@@ -147,16 +153,22 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 		setLoaded(true);
 	}, []);
 
+	const debouncedRefresh = useCallback(() => {
+		clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(refresh, 300);
+	}, [refresh]);
+
 	// Fetch on mount + listen for refresh events
 	useEffect(() => {
-		refresh();
-		const onRefresh = () => refresh();
-		const onVisibility = () => { if (!document.hidden) refresh(); };
+		refresh(); // immediate on mount
+		const onRefresh = () => debouncedRefresh();
+		const onVisibility = () => { if (!document.hidden) debouncedRefresh(); };
 		window.addEventListener("studio:refresh", onRefresh);
 		document.addEventListener("visibilitychange", onVisibility);
 		return () => {
 			window.removeEventListener("studio:refresh", onRefresh);
 			document.removeEventListener("visibilitychange", onVisibility);
+			clearTimeout(debounceRef.current);
 		};
 	}, [refresh]);
 
