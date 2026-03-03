@@ -225,11 +225,7 @@ export const MyAnimation = () => (
 
 Key patterns:
 - **Tailwind for layout/colors** (\`className\`), **inline style only for animated values** (\`opacity\`, \`transform\`, dynamic \`width\`)
-- Letter-by-letter stagger: \`spring({ frame: Math.max(0, frame - i * N) })\`
-- Word-by-word reveal: same pattern with \`interpolate\` for opacity + \`spring\` for Y
-- Gradient text: \`background: linear-gradient\` + \`WebkitBackgroundClip: "text"\`
 - Entrance then hold: spring in, then let it sit — stillness after motion has impact
-- Fade to black: \`interpolate(frame, [N-40, N], [1, 0])\` on root opacity
 - Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
 
 ### Remotion rules
