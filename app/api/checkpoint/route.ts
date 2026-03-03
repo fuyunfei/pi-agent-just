@@ -5,11 +5,12 @@
  * POST /api/checkpoint → { action: "rollback", entryId: string }
  */
 
-import { getOrCreateSingleton } from "../agent/singleton";
+import { getOrCreateSingleton, getSessionId } from "../agent/singleton";
 
-export async function GET() {
+export async function GET(req: Request) {
 	try {
-		const { session } = getOrCreateSingleton();
+		const sid = getSessionId(req);
+		const { session } = getOrCreateSingleton(sid);
 		const entries = session.getUserMessagesForForking();
 		const checkpoints = entries.map((e, i) => ({
 			entryId: e.entryId,
@@ -35,7 +36,8 @@ export async function POST(req: Request) {
 			);
 		}
 
-		const { session, overlayFs, fsCheckpoints } = getOrCreateSingleton();
+		const sid = getSessionId(req);
+		const { session, overlayFs, fsCheckpoints } = getOrCreateSingleton(sid);
 
 		// SDK handles conversation rollback (creates a branch in the session tree)
 		await session.navigateTree(entryId);

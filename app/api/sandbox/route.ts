@@ -5,14 +5,15 @@
  * POST /api/sandbox → { action: "clear" }  — reset sandbox to empty
  */
 
-import { getOrCreateSingleton, clearSingleton } from "../agent/singleton";
+import { getOrCreateSingleton, getSessionId, clearSingleton } from "../agent/singleton";
 
 // System paths created by Bash constructor — not user project files
 const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
 
-export async function GET() {
+export async function GET(req: Request) {
 	try {
-		const { overlayFs } = getOrCreateSingleton();
+		const sid = getSessionId(req);
+		const { overlayFs } = getOrCreateSingleton(sid);
 		const mountPoint = overlayFs.getMountPoint();
 		const changes = overlayFs
 			.getOverlayChanges()
@@ -28,11 +29,12 @@ export async function GET() {
 
 export async function POST(req: Request) {
 	try {
+		const sid = getSessionId(req);
 		const body = await req.json();
 		const { action } = body;
 
 		if (action === "clear") {
-			await clearSingleton();
+			await clearSingleton(sid);
 			return Response.json({ ok: true });
 		}
 
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
 			if (!path || typeof path !== "string") {
 				return Response.json({ error: "Missing path" }, { status: 400 });
 			}
-			const { overlayFs } = getOrCreateSingleton();
+			const { overlayFs } = getOrCreateSingleton(sid);
 			await overlayFs.rm(path);
 			console.log(`[sandbox] delete ${path}`);
 			const mountPoint = overlayFs.getMountPoint();

@@ -6,7 +6,7 @@
  */
 
 import { getModel } from "@mariozechner/pi-ai";
-import { getOrCreateSingleton } from "../agent/singleton";
+import { getOrCreateSingleton, getSessionId } from "../agent/singleton";
 
 const AVAILABLE_MODELS = [
 	{ provider: "google", id: "gemini-3-flash-preview", label: "Gemini 3 Flash", desc: "Fast" },
@@ -20,9 +20,10 @@ const AVAILABLE_MODELS = [
 	{ provider: "minimax", id: "minimax-m2.5", label: "MiniMax M2.5", desc: "MiniMax" },
 ] as const;
 
-export async function GET() {
+export async function GET(req: Request) {
 	try {
-		const { session } = getOrCreateSingleton();
+		const sid = getSessionId(req);
+		const { session } = getOrCreateSingleton(sid);
 		const model = session.model;
 		return Response.json({
 			current: model
@@ -48,7 +49,8 @@ export async function POST(req: Request) {
 			);
 		}
 
-		const { session } = getOrCreateSingleton();
+		const sid = getSessionId(req);
+		const { session } = getOrCreateSingleton(sid);
 
 		// For non-openrouter providers, use openrouter as the actual provider
 		// with the format "provider/modelId" as the model ID

@@ -1,10 +1,11 @@
-import { compactSession, getFullSessionStats } from "../singleton";
+import { compactSession, getFullSessionStats, getSessionId } from "../singleton";
 
 export async function POST(req: Request) {
+	const sid = getSessionId(req);
 	const { command } = await req.json();
 
 	if (command === "session") {
-		const stats = getFullSessionStats();
+		const stats = getFullSessionStats(sid);
 		if (!stats) {
 			return Response.json({ ok: false, error: "No active session" });
 		}
@@ -13,7 +14,7 @@ export async function POST(req: Request) {
 
 	if (command === "compact") {
 		try {
-			const result = await compactSession();
+			const result = await compactSession(sid);
 			return Response.json({ ok: true, command: "compact", result });
 		} catch (err) {
 			return Response.json({

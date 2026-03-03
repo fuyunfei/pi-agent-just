@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
 	const password = process.env.ACCESS_PASSWORD;
-	if (!password) return NextResponse.next();
 
 	// Allow the login page and login API
 	if (
@@ -13,15 +12,29 @@ export function middleware(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	// Check auth cookie
-	const authed = request.cookies.get("authed")?.value;
-	if (authed === password) {
-		return NextResponse.next();
+	// Check auth cookie (if password protection is enabled)
+	if (password) {
+		const authed = request.cookies.get("authed")?.value;
+		if (authed !== password) {
+			const loginUrl = new URL("/login", request.url);
+			return NextResponse.redirect(loginUrl);
+		}
 	}
 
-	// Redirect to login
-	const loginUrl = new URL("/login", request.url);
-	return NextResponse.redirect(loginUrl);
+	// Ensure session ID cookie exists
+	const sessionId = request.cookies.get("sid")?.value;
+	if (!sessionId) {
+		const response = NextResponse.next();
+		response.cookies.set("sid", crypto.randomUUID(), {
+			httpOnly: true,
+			sameSite: "lax",
+			path: "/",
+			maxAge: 60 * 60 * 24, // 24h
+		});
+		return response;
+	}
+
+	return NextResponse.next();
 }
 
 export const config = {

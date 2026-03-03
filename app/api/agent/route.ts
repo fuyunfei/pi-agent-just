@@ -3,7 +3,7 @@
  */
 
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { getOrCreateSingleton, getSessionStats, persistCurrentSnapshot } from "./singleton";
+import { getOrCreateSingleton, getSessionId, getSessionStats, persistCurrentSnapshot } from "./singleton";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,9 +32,10 @@ export async function POST(req: Request) {
 	const promptPreview = promptText.length > 80 ? promptText.slice(0, 77) + "..." : promptText;
 	console.log(`[route] prompt="${promptPreview}" images=${images?.length ?? 0}`);
 
+	const sid = getSessionId(req);
 	let ctx: ReturnType<typeof getOrCreateSingleton>;
 	try {
-		ctx = getOrCreateSingleton();
+		ctx = getOrCreateSingleton(sid);
 	} catch (err) {
 		return new Response(
 			JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
@@ -144,8 +145,8 @@ export async function POST(req: Request) {
 						fsCheckpoints.set(leafId, overlayFs.snapshot());
 					}
 					// Persist to /tmp so files survive cold starts
-					persistCurrentSnapshot();
-					const usage = getSessionStats();
+					persistCurrentSnapshot(sid);
+					const usage = getSessionStats(sid);
 					console.log(`[route] done entry=${leafId ?? "?"} tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
 					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage });
 					try {

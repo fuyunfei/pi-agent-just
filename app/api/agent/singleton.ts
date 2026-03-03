@@ -356,18 +356,62 @@ function createOverlayGrepOps(fs: OverlayFs): GrepOperations {
 }
 
 // ---------------------------------------------------------------------------
-// Module-level singleton — persists across requests
+// Session ID helper
 // ---------------------------------------------------------------------------
 
-let singleton: {
+/** Extract session ID from request cookie. */
+export function getSessionId(request: Request): string {
+	const cookie = request.headers.get("cookie") || "";
+	const match = cookie.match(/(?:^|;\s*)sid=([^;]+)/);
+	return match?.[1] || "default";
+}
+
+// ---------------------------------------------------------------------------
+// Per-session singletons — keyed by session ID from cookie
+// ---------------------------------------------------------------------------
+
+interface Singleton {
 	session: AgentSession;
 	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
 	fsCheckpoints: Map<string, FsSnapshot>;
-} | null = null;
+	lastAccess: number;
+}
 
-export function getOrCreateSingleton() {
-	if (singleton) return singleton;
+const sessions = new Map<string, Singleton>();
+const MAX_SESSIONS = 10;
+const SESSION_TTL = 60 * 60 * 1000; // 1 hour
+
+/** Evict expired sessions, and oldest if over limit. */
+function evictSessions() {
+	const now = Date.now();
+	for (const [id, s] of sessions) {
+		if (now - s.lastAccess > SESSION_TTL) {
+			console.log(`[agent] evict session ${id.slice(0, 8)} (expired)`);
+			sessions.delete(id);
+		}
+	}
+	while (sessions.size >= MAX_SESSIONS) {
+		let oldestId: string | null = null;
+		let oldestTime = Infinity;
+		for (const [id, s] of sessions) {
+			if (s.lastAccess < oldestTime) { oldestTime = s.lastAccess; oldestId = id; }
+		}
+		if (oldestId) {
+			console.log(`[agent] evict session ${oldestId.slice(0, 8)} (over limit)`);
+			sessions.delete(oldestId);
+		}
+	}
+}
+
+export function getOrCreateSingleton(sessionId = "default") {
+	const existing = sessions.get(sessionId);
+	if (existing) {
+		existing.lastAccess = Date.now();
+		return existing;
+	}
+
+	evictSessions();
 
 	// --- Sandbox setup (writes allowed, stay in memory) ---
 	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
@@ -478,16 +522,18 @@ export function getOrCreateSingleton() {
 	// Store initial checkpoint before any turns
 	fsCheckpoints.set("initial", overlayFs.snapshot());
 
-	singleton = { session, sessionManager, overlayFs, fsCheckpoints };
-	console.log(`[agent] init model=${modelId}`);
-	return singleton;
+	const entry: Singleton = { session, sessionManager, overlayFs, fsCheckpoints, lastAccess: Date.now() };
+	sessions.set(sessionId, entry);
+	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
+	return entry;
 }
 
 /** Return aggregated session stats + context usage (minimal, for footer). */
-export function getSessionStats() {
-	if (!singleton) return null;
-	const stats = singleton.session.getSessionStats();
-	const context = singleton.session.getContextUsage();
+export function getSessionStats(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) return null;
+	const stats = s.session.getSessionStats();
+	const context = s.session.getContextUsage();
 	return {
 		totalTokens: stats.tokens.total,
 		cost: stats.cost,
@@ -496,11 +542,12 @@ export function getSessionStats() {
 }
 
 /** Return detailed session stats for /session command. */
-export function getFullSessionStats() {
-	if (!singleton) return null;
-	const stats = singleton.session.getSessionStats();
-	const context = singleton.session.getContextUsage();
-	const model = singleton.session.agent.state.model;
+export function getFullSessionStats(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) return null;
+	const stats = s.session.getSessionStats();
+	const context = s.session.getContextUsage();
+	const model = s.session.agent.state.model;
 	return {
 		model: model ? `${model.provider}/${model.id}` : "unknown",
 		messages: stats.totalMessages,
@@ -526,9 +573,10 @@ export function getFullSessionStats() {
 }
 
 /** Manually compact the session context. */
-export async function compactSession() {
-	if (!singleton) throw new Error("No active session");
-	const result = await singleton.session.compact();
+export async function compactSession(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) throw new Error("No active session");
+	const result = await s.session.compact();
 	return {
 		summary: result.summary,
 		tokensBefore: result.tokensBefore,
@@ -536,27 +584,24 @@ export async function compactSession() {
 }
 
 /** Persist current OverlayFs state to /tmp for cold-start recovery. */
-export function persistCurrentSnapshot() {
-	if (!singleton) return;
-	persistSnapshot(singleton.overlayFs.snapshot());
+export function persistCurrentSnapshot(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) return;
+	persistSnapshot(s.overlayFs.snapshot());
 }
 
 /** Clear all state in-place — same instance, no orphan references. */
-export async function clearSingleton() {
-	if (!singleton) return;
-	const { session, overlayFs, fsCheckpoints } = singleton;
-	// Abort if agent is running
+export async function clearSingleton(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) return;
+	const { session, overlayFs, fsCheckpoints } = s;
 	if (session.isStreaming) {
 		await session.abort();
 	}
-	// Clear files (restore to empty snapshot)
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
-	// Clear conversation
 	await session.newSession();
-	// Clear checkpoints and restore initial empty snapshot
 	fsCheckpoints.clear();
 	fsCheckpoints.set("initial", overlayFs.snapshot());
-	// Clear persisted snapshot
 	try { unlinkSync(SNAPSHOT_PATH); } catch { /* ignore if missing */ }
-	console.log("[agent] cleared");
+	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }
