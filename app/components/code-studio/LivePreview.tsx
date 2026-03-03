@@ -540,6 +540,8 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 						</div>
 					</div>
 				)}
+				{/* Watermark */}
+				<img src="/logo.svg" alt="" style={{ position: "absolute", bottom: 12, right: 12, width: 24, opacity: 0.15, pointerEvents: "none", zIndex: 5 }} />
 				<div style={{ width: "100%", height: "100%", pointerEvents: "none" }}>
 					<PlayerComp
 						ref={playerRef}

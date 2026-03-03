@@ -10,10 +10,12 @@
 import React, { useEffect, useState } from "react";
 import {
 	AbsoluteFill,
+	Img,
 	Sequence,
 	continueRender,
 	delayRender,
 	getInputProps,
+	staticFile,
 } from "remotion";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
@@ -84,6 +86,14 @@ interface CompiledScene {
 	durationInFrames: number;
 }
 
+function Watermark() {
+	return (
+		<AbsoluteFill style={{ pointerEvents: "none", justifyContent: "flex-end", alignItems: "flex-end", padding: 24 }}>
+			<Img src={staticFile("logo.svg")} style={{ width: 36, opacity: 0.15 }} />
+		</AbsoluteFill>
+	);
+}
+
 function ErrorScreen({ message }: { message: string }) {
 	return (
 		<AbsoluteFill style={{ backgroundColor: "#1a1a2e", justifyContent: "center", alignItems: "center", padding: 60 }}>
@@ -147,31 +157,34 @@ export const DynamicComp: React.FC = () => {
 	// Single scene — render directly
 	if (scenes.length === 1) {
 		const Scene = scenes[0].Component;
-		return <Scene />;
+		return <AbsoluteFill><Scene /><Watermark /></AbsoluteFill>;
 	}
 
 	// Multi scene — compose with crossfade transitions
 	return (
-		<TransitionSeries>
-			{scenes.flatMap((scene, i) => {
-				const Scene = scene.Component;
-				const elements: React.ReactNode[] = [];
-				if (i > 0) {
+		<AbsoluteFill>
+			<TransitionSeries>
+				{scenes.flatMap((scene, i) => {
+					const Scene = scene.Component;
+					const elements: React.ReactNode[] = [];
+					if (i > 0) {
+						elements.push(
+							<TransitionSeries.Transition
+								key={`t-${i}`}
+								presentation={fade()}
+								timing={linearTiming({ durationInFrames: CROSSFADE_FRAMES })}
+							/>,
+						);
+					}
 					elements.push(
-						<TransitionSeries.Transition
-							key={`t-${i}`}
-							presentation={fade()}
-							timing={linearTiming({ durationInFrames: CROSSFADE_FRAMES })}
-						/>,
+						<TransitionSeries.Sequence key={`s-${i}`} durationInFrames={scene.durationInFrames}>
+							<Scene />
+						</TransitionSeries.Sequence>,
 					);
-				}
-				elements.push(
-					<TransitionSeries.Sequence key={`s-${i}`} durationInFrames={scene.durationInFrames}>
-						<Scene />
-					</TransitionSeries.Sequence>,
-				);
-				return elements;
-			})}
-		</TransitionSeries>
+					return elements;
+				})}
+			</TransitionSeries>
+			<Watermark />
+		</AbsoluteFill>
 	);
 };
