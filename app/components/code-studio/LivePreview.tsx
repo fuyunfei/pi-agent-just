@@ -385,10 +385,10 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		[],
 	);
 
-	// Clear runtime error on scene change
+	// Clear runtime error on scene change or recompile
 	useEffect(() => {
 		setRuntimeError(null);
-	}, [sceneIndex]);
+	}, [sceneIndex, playerKey]);
 
 	// Click on progress bar to seek — calculate which segment and position
 	const barRef = useRef<HTMLDivElement>(null);
