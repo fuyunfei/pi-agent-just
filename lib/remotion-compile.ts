@@ -45,55 +45,56 @@ export interface CompilationResult {
 }
 
 // ---------------------------------------------------------------------------
-// Import stripping & component extraction
+// Babel plugin: strip import/export at AST level (replaces fragile regex)
 // ---------------------------------------------------------------------------
 
-function stripImports(code: string): string {
-	let cleaned = code;
-	// Type imports
-	cleaned = cleaned.replace(/import\s+type\s*\{[\s\S]*?\}\s*from\s*["'][^"']+["'];?/g, "");
-	// Combined default + named imports
-	cleaned = cleaned.replace(/import\s+\w+\s*,\s*\{[\s\S]*?\}\s*from\s*["'][^"']+["'];?/g, "");
-	// Named imports
-	cleaned = cleaned.replace(/import\s*\{[\s\S]*?\}\s*from\s*["'][^"']+["'];?/g, "");
-	// Namespace imports
-	cleaned = cleaned.replace(/import\s+\*\s+as\s+\w+\s+from\s*["'][^"']+["'];?/g, "");
-	// Default imports
-	cleaned = cleaned.replace(/import\s+\w+\s+from\s*["'][^"']+["'];?/g, "");
-	// Side-effect imports
-	cleaned = cleaned.replace(/import\s*["'][^"']+["'];?/g, "");
-	return cleaned.trim();
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function createStripModuleSyntax(onDefault: (name: string) => void, onNamed: (name: string) => void) {
+	return ({ types: t }: any) => ({
+		visitor: {
+			// Remove all imports — globals are injected via new Function() params
+			ImportDeclaration(path: any) {
+				path.remove();
+			},
+			// export default → plain declaration, track component name
+			ExportDefaultDeclaration(path: any) {
+				const decl = path.node.declaration;
+				if (decl.type === "FunctionDeclaration" || decl.type === "ClassDeclaration") {
+					if (!decl.id) decl.id = t.identifier("_Comp");
+					onDefault(decl.id.name);
+					path.replaceWith(decl);
+				} else if (decl.type === "Identifier") {
+					onDefault(decl.name);
+					path.remove();
+				} else {
+					// ArrowFunctionExpression, FunctionExpression, ClassDeclaration, etc.
+					onDefault("_Comp");
+					path.replaceWith(
+						t.variableDeclaration("const", [
+							t.variableDeclarator(t.identifier("_Comp"), decl),
+						]),
+					);
+				}
+			},
+			// export const/function/class → strip export keyword, track name
+			ExportNamedDeclaration(path: any) {
+				if (path.node.declaration) {
+					const decl = path.node.declaration;
+					// Track the first exported name as potential component
+					if (decl.type === "VariableDeclaration" && decl.declarations?.[0]?.id?.name) {
+						onNamed(decl.declarations[0].id.name);
+					} else if ((decl.type === "FunctionDeclaration" || decl.type === "ClassDeclaration") && decl.id?.name) {
+						onNamed(decl.id.name);
+					}
+					path.replaceWith(decl);
+				} else {
+					path.remove();
+				}
+			},
+		},
+	});
 }
-
-function extractComponentBody(code: string): string {
-	const cleaned = stripImports(code);
-
-	// Each pattern captures (helpers)(body). Tried in order of likelihood.
-	const patterns: { re: RegExp; jsxReturn?: boolean }[] = [
-		// export [default] const X [: Type] = () => { BODY }
-		{ re: /^([\s\S]*?)export\s+(?:default\s+)?const\s+\w+\s*(?::[^=]+)?\s*=\s*\(\s*\)\s*=>\s*\{([\s\S]*)\};?\s*$/ },
-		// export [default] const X [: Type] = () => ( JSX )
-		{ re: /^([\s\S]*?)export\s+(?:default\s+)?const\s+\w+\s*(?::[^=]+)?\s*=\s*\(\s*\)\s*=>\s*\(([\s\S]*)\);?\s*$/, jsxReturn: true },
-		// export [default] function X() { BODY }
-		{ re: /^([\s\S]*?)export\s+(?:default\s+)?function\s+\w+\s*\(\s*\)\s*\{([\s\S]*)\}\s*$/ },
-		// export default () => { BODY }
-		{ re: /^([\s\S]*?)export\s+default\s+\(\s*\)\s*=>\s*\{([\s\S]*)\};?\s*$/ },
-		// export default () => ( JSX )
-		{ re: /^([\s\S]*?)export\s+default\s+\(\s*\)\s*=>\s*\(([\s\S]*)\);?\s*$/, jsxReturn: true },
-	];
-
-	for (const { re, jsxReturn } of patterns) {
-		const m = cleaned.match(re);
-		if (m) {
-			const helpers = m[1].trim();
-			const rawBody = m[2].trim();
-			const body = jsxReturn ? `return (\n${rawBody}\n);` : rawBody;
-			return helpers ? `${helpers}\n\n${body}` : body;
-		}
-	}
-
-	return cleaned;
-}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // ---------------------------------------------------------------------------
 // Injected globals — parameter names & values for `new Function()`
@@ -123,7 +124,13 @@ inject("spring", spring);
 inject("Easing", Easing);
 inject("useCurrentFrame", useCurrentFrame);
 inject("useVideoConfig", useVideoConfig);
-inject("Sequence", Sequence);
+
+// Sequence: default layout="none" so it only controls timing, doesn't wrap in AbsoluteFill
+const SequenceNoLayout = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof Sequence>>(
+	(props, ref) => React.createElement(Sequence, { layout: "none", ...props, ref }),
+);
+SequenceNoLayout.displayName = "Sequence";
+inject("Sequence", SequenceNoLayout);
 inject("Img", Img);
 inject("Audio", Audio);
 inject("Video", Video);
@@ -173,20 +180,49 @@ export function compileRemotionCode(code: string): CompilationResult {
 	}
 
 	try {
-		const componentBody = extractComponentBody(code);
-		const wrappedSource = `const DynamicAnimation = () => {\n${componentBody}\n};`;
+		let src = code;
+		let defaultExportName: string | null = null;
+		let namedExportName: string | null = null;
 
-		const transpiled = Babel.transform(wrappedSource, {
-			presets: ["react", "typescript"],
-			filename: "dynamic-animation.tsx",
-		});
+		// Fix invalid "export default const/let/var X" (common AI mistake)
+		const edcMatch = src.match(/export\s+default\s+(?:const|let|var)\s+(\w+)/);
+		if (edcMatch) {
+			src = src.replace(/export\s+default\s+(const|let|var)\s+/, "$1 ");
+			defaultExportName = edcMatch[1];
+		}
+
+		const plugin = createStripModuleSyntax(
+			(name) => { defaultExportName = name; },
+			(name) => { namedExportName = name; },
+		);
+		const babelOpts = { presets: ["react", "typescript"], plugins: [plugin], sourceType: "module" as const, filename: "dynamic-animation.tsx" };
+
+		let transpiled: ReturnType<typeof Babel.transform>;
+		try {
+			transpiled = Babel.transform(src, babelOpts);
+		} catch (babelErr: unknown) {
+			// Bare component body (no function wrapper) → wrap and retry
+			const msg = babelErr instanceof Error ? babelErr.message : "";
+			if (msg.includes("'return' outside of function")) {
+				const stripped = src.replace(/^\s*import\s+.*$/gm, "");
+				defaultExportName = "_Comp";
+				transpiled = Babel.transform(`function _Comp() {\n${stripped}\n}`, babelOpts);
+			} else {
+				throw babelErr;
+			}
+		}
 
 		if (!transpiled.code) {
 			return { Component: null, error: "Transpilation failed" };
 		}
 
-		const wrappedCode = `${transpiled.code}\nreturn DynamicAnimation;`;
-		const createComponent = new Function(...PARAM_NAMES, wrappedCode);
+		// Use default export, or named export, or wrap as component body (backward compat).
+		const exportName = defaultExportName || namedExportName;
+		const finalCode = exportName
+			? `${transpiled.code}\nreturn ${exportName};`
+			: `var _Comp = function _Comp() {\n${transpiled.code}\n};\nreturn _Comp;`;
+
+		const createComponent = new Function(...PARAM_NAMES, finalCode);
 		const Component = createComponent(...PARAM_VALUES);
 
 		if (typeof Component !== "function") {
