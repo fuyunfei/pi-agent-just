@@ -131,8 +131,8 @@ From "remotion":
   useCurrentFrame, useVideoConfig
 
 From "@remotion/shapes":
-  Rect, Circle, Triangle, Star, Polygon, Ellipse, Heart, Pie,
-  makeRect, makeCircle, makeTriangle, makeStar, makePolygon, makeEllipse, makeHeart, makePie
+  Rect(width, height), Circle(radius), Triangle(length, direction), Star(innerRadius, outerRadius, points), Polygon(radius, points), Ellipse(rx, ry), Heart(width), Pie(radius, progress)
+  Note: shapes use specific size props (not generic width/height) — check the prop names above
 
 From "@remotion/transitions":
   TransitionSeries, linearTiming, springTiming
