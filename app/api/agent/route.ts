@@ -147,8 +147,15 @@ export async function POST(req: Request) {
 					// Persist to /tmp so files survive cold starts
 					persistCurrentSnapshot(sid);
 					const usage = getSessionStats(sid);
+
+					// Push file state so client doesn't need to poll GET /api/sandbox
+					const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
+					const changes = overlayFs.getOverlayChanges()
+						.filter((c: { path: string }) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
+					const mountPoint = overlayFs.getMountPoint();
+
 					console.log(`[route] done entry=${leafId ?? "?"} tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
-					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage });
+					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage, changes, mountPoint });
 					try {
 						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 						controller.close();

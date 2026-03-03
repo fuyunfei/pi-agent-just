@@ -161,7 +161,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 	// Fetch on mount + listen for refresh events
 	useEffect(() => {
 		refresh(); // immediate on mount
-		const onRefresh = () => debouncedRefresh();
+		const onRefresh = (e: Event) => {
+			const detail = (e as CustomEvent).detail;
+			if (detail?.changes) {
+				// Direct push from SSE — no fetch needed
+				dispatch({ type: "SET_CHANGES", changes: detail.changes, mountPoint: detail.mountPoint || "" });
+			} else {
+				// Fallback: fetch from server (mount, clear, rollback)
+				debouncedRefresh();
+			}
+		};
 		const onVisibility = () => { if (!document.hidden) debouncedRefresh(); };
 		window.addEventListener("studio:refresh", onRefresh);
 		document.addEventListener("visibilitychange", onVisibility);
@@ -170,7 +179,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 			document.removeEventListener("visibilitychange", onVisibility);
 			clearTimeout(debounceRef.current);
 		};
-	}, [refresh]);
+	}, [refresh, debouncedRefresh]);
 
 	// Close all tabs when changes become empty (after clear) — only after initial fetch
 	useEffect(() => {
