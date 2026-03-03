@@ -39,7 +39,9 @@ const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 // ---------------------------------------------------------------------------
 // Persist / restore OverlayFs snapshot to /tmp so files survive cold starts
 // ---------------------------------------------------------------------------
-const SNAPSHOT_PATH = join(tmpdir(), "pi-sandbox-snapshot.json");
+function snapshotPath(sessionId: string) {
+	return join(tmpdir(), `pi-sandbox-snapshot-${sessionId.slice(0, 8)}.json`);
+}
 
 interface SerializedEntry {
 	type: "file" | "directory";
@@ -48,7 +50,7 @@ interface SerializedEntry {
 	mtime: string;
 }
 
-function persistSnapshot(snap: FsSnapshot) {
+function persistSnapshot(snap: FsSnapshot, sessionId: string) {
 	try {
 		const memory: Record<string, SerializedEntry> = {};
 		for (const [path, entry] of snap.memory) {
@@ -57,13 +59,13 @@ function persistSnapshot(snap: FsSnapshot) {
 			if (entry.type === "file") se.content = Buffer.from(entry.content).toString("base64");
 			memory[path] = se;
 		}
-		writeFileSync(SNAPSHOT_PATH, JSON.stringify({ memory, deleted: [...snap.deleted] }));
+		writeFileSync(snapshotPath(sessionId), JSON.stringify({ memory, deleted: [...snap.deleted] }));
 	} catch { /* ignore write errors */ }
 }
 
-function loadPersistedSnapshot(): FsSnapshot | null {
+function loadPersistedSnapshot(sessionId: string): FsSnapshot | null {
 	try {
-		const raw = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf-8"));
+		const raw = JSON.parse(readFileSync(snapshotPath(sessionId), "utf-8"));
 		const memory = new Map<string, import("just-bash").MemoryEntry>();
 		for (const [path, se] of Object.entries(raw.memory) as [string, SerializedEntry][]) {
 			if (se.type === "file") {
@@ -417,7 +419,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
 
 	// Restore files from /tmp if this is a cold start
-	const persisted = loadPersistedSnapshot();
+	const persisted = loadPersistedSnapshot(sessionId);
 	if (persisted) {
 		overlayFs.restore(persisted);
 		console.log(`[agent] restored ${persisted.memory.size} files from /tmp`);
@@ -480,7 +482,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		getApiKey: async () => apiKey,
 	});
 
-	const sessionDir = join(tmpdir(), "pi-session");
+	const sessionDir = join(tmpdir(), `pi-session-${sessionId.slice(0, 8)}`);
 	const sessionManager = SessionManager.create(mountPoint, sessionDir);
 	const settingsManager = SettingsManager.inMemory({
 		compaction: { enabled: true },
@@ -587,7 +589,7 @@ export async function compactSession(sessionId = "default") {
 export function persistCurrentSnapshot(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return;
-	persistSnapshot(s.overlayFs.snapshot());
+	persistSnapshot(s.overlayFs.snapshot(), sessionId);
 }
 
 /** Clear all state in-place — same instance, no orphan references. */
@@ -602,6 +604,6 @@ export async function clearSingleton(sessionId = "default") {
 	await session.newSession();
 	fsCheckpoints.clear();
 	fsCheckpoints.set("initial", overlayFs.snapshot());
-	try { unlinkSync(SNAPSHOT_PATH); } catch { /* ignore if missing */ }
+	try { unlinkSync(snapshotPath(sessionId)); } catch { /* ignore if missing */ }
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }
