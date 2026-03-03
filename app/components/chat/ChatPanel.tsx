@@ -70,8 +70,10 @@ import type { FileUIPart } from "@/components/ai-elements/ai-types";
 /*  Available models                                                    */
 /* ------------------------------------------------------------------ */
 
+const DEFAULT_MODEL: ModelInfo = { provider: "google", id: "gemini-3-flash-preview", label: "Gemini 3 Flash", desc: "Fast" };
+
 const AVAILABLE_MODELS: ModelInfo[] = [
-	{ provider: "google", id: "gemini-3-flash-preview", label: "Gemini 3 Flash", desc: "Fast" },
+	DEFAULT_MODEL,
 	{ provider: "google", id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", desc: "Capable" },
 	{ provider: "google", id: "gemini-3.1-pro-preview-customtools", label: "Gemini 3.1 Pro CT", desc: "Custom tools" },
 	{ provider: "google", id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", desc: "Cheapest" },
@@ -604,6 +606,10 @@ function ModelSelector({ models, current, onSwitch }: {
 	onSwitch: (provider: string, id: string) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	const active = current || DEFAULT_MODEL;
+	// Short label: "Gemini 3 Flash" → "G3 Flash", "Haiku 4.5" stays
+	const shortLabel = active.label.replace(/^Gemini /, "G");
+	const isSelected = (m: ModelInfo) => m.id === active.id && m.provider === active.provider;
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
@@ -611,7 +617,7 @@ function ModelSelector({ models, current, onSwitch }: {
 					type="button"
 					className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
 				>
-					<span className="truncate max-w-[120px]">{current?.label || "Model"}</span>
+					<span className="truncate max-w-[90px]">{shortLabel}</span>
 					<ChevronDownIcon className="size-3 opacity-50" />
 				</button>
 			</PopoverTrigger>
@@ -622,17 +628,15 @@ function ModelSelector({ models, current, onSwitch }: {
 						type="button"
 						onClick={() => { onSwitch(m.provider, m.id); setOpen(false); }}
 						className={cn(
-							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-accent",
-							current?.id === m.id && current?.provider === m.provider
-								? "text-foreground font-medium"
-								: "text-muted-foreground",
+							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors",
+							isSelected(m)
+								? "bg-accent text-foreground font-medium"
+								: "text-muted-foreground hover:bg-accent/50",
 						)}
 					>
+						<CheckIcon className={cn("size-3 flex-shrink-0", isSelected(m) ? "text-emerald-500" : "invisible")} />
 						<span className="flex-1 truncate">{m.label}</span>
 						<span className="text-[10px] text-muted-foreground/50">{m.desc}</span>
-						{current?.id === m.id && current?.provider === m.provider && (
-							<CheckIcon className="size-3 text-emerald-500 flex-shrink-0" />
-						)}
 					</button>
 				))}
 			</PopoverContent>
