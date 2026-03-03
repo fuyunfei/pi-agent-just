@@ -5,7 +5,7 @@
  * POST /api/sandbox → { action: "clear" }  — reset sandbox to empty
  */
 
-import { getOrCreateSingleton, resetSingleton } from "../agent/singleton";
+import { getOrCreateSingleton, clearSingleton } from "../agent/singleton";
 
 // System paths created by Bash constructor — not user project files
 const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
@@ -32,8 +32,7 @@ export async function POST(req: Request) {
 		const { action } = body;
 
 		if (action === "clear") {
-			console.log("[sandbox] clear");
-			resetSingleton();
+			await clearSingleton();
 			return Response.json({ ok: true });
 		}
 

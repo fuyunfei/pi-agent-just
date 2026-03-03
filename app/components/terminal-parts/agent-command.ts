@@ -215,10 +215,10 @@ export function createAgentCommand(term: TerminalWriter) {
                 term.write(`\x1b[36m[read] ${args.path}\x1b[0m\r\n`);
               } else if ((data.toolName === "writeFile" || data.toolName === "write") && args.path) {
                 term.write(`\x1b[36m[write] ${args.path}\x1b[0m\r\n`);
-                window.dispatchEvent(new CustomEvent("studio:file-written", { detail: { path: String(args.path) } }));
+                window.dispatchEvent(new CustomEvent("studio:refresh"));
               } else if (data.toolName === "edit" && args.path) {
                 term.write(`\x1b[36m[edit] ${args.path}\x1b[0m\r\n`);
-                window.dispatchEvent(new CustomEvent("studio:file-written", { detail: { path: String(args.path) } }));
+                window.dispatchEvent(new CustomEvent("studio:refresh"));
               } else if (data.toolName === "ls" && args.path) {
                 term.write(`\x1b[36m[ls] ${args.path}\x1b[0m\r\n`);
               } else {

@@ -99,7 +99,7 @@ You can chat and create animated videos using Remotion.
 
 ## Remotion overview
 You create .tsx files containing Remotion components. The preview panel auto-detects code importing from "remotion" and renders it with the built-in Remotion Player.
-For complex or long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director. 
+For long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director. 
 
 ### Duration & multi-file scene design (CRITICAL)
 - Each .tsx file should be a **self-contained scene of 15–30 seconds** max. This is the sweet spot for visual quality.
@@ -218,6 +218,7 @@ Key patterns from this example:
 
 ## Constraints
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
+- Do NOT create a main.tsx, master.tsx, timeline.tsx, or any "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above`;
 
 // ---------------------------------------------------------------------------
@@ -515,9 +516,22 @@ export function persistCurrentSnapshot() {
 	persistSnapshot(singleton.overlayFs.snapshot());
 }
 
-/** Destroy the current session — next getOrCreateSingleton() creates a fresh one. */
-export function resetSingleton() {
-	singleton = null;
+/** Clear all state in-place — same instance, no orphan references. */
+export async function clearSingleton() {
+	if (!singleton) return;
+	const { session, overlayFs, fsCheckpoints } = singleton;
+	// Abort if agent is running
+	if (session.isStreaming) {
+		await session.abort();
+	}
+	// Clear files (restore to empty snapshot)
+	overlayFs.restore({ memory: new Map(), deleted: new Set() });
+	// Clear conversation
+	await session.newSession();
+	// Clear checkpoints and restore initial empty snapshot
+	fsCheckpoints.clear();
+	fsCheckpoints.set("initial", overlayFs.snapshot());
+	// Clear persisted snapshot
 	try { unlinkSync(SNAPSHOT_PATH); } catch { /* ignore if missing */ }
-	console.log("[agent] reset");
+	console.log("[agent] cleared");
 }

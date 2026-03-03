@@ -22,9 +22,8 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
-	const readyRef = useRef(false);
 
-	// Clear everything on mount (fresh start), block sends until done
+	// Fresh start on mount (refresh = new)
 	useEffect(() => {
 		localStorage.removeItem(STORAGE_KEY);
 		fetch("/api/sandbox", {
@@ -32,11 +31,8 @@ export function useChatAgent() {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
 		}).then(() => {
-			readyRef.current = true;
-			window.dispatchEvent(new CustomEvent("studio:rollback"));
-		}).catch(() => {
-			readyRef.current = true;
-		});
+			window.dispatchEvent(new CustomEvent("studio:refresh"));
+		}).catch(() => {});
 	}, []);
 
 	// Fetch current model on mount
@@ -92,8 +88,9 @@ export function useChatAgent() {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ action: "clear" }),
+				}).then(() => {
+					window.dispatchEvent(new CustomEvent("studio:refresh"));
 				}).catch(() => {});
-				window.dispatchEvent(new CustomEvent("studio:rollback"));
 				return true;
 			}
 
@@ -162,14 +159,6 @@ export function useChatAgent() {
 
 	const send = useCallback(
 		async (text: string, files?: FileUIPart[], displayText?: string) => {
-			// Wait for mount clear to finish before first send
-			if (!readyRef.current) {
-				await new Promise<void>((resolve) => {
-					const check = () => { if (readyRef.current) resolve(); else setTimeout(check, 50); };
-					check();
-				});
-			}
-
 			// Intercept slash commands
 			if (text.startsWith("/") && !files?.length) {
 				await runCommand(text);
@@ -383,7 +372,7 @@ export function useChatAgent() {
 								// Refresh file list after file-changing tools complete
 								const tn = toolNameById.get(data.toolCallId);
 								if (tn === "write" || tn === "writeFile" || tn === "edit" || tn === "bash") {
-									window.dispatchEvent(new CustomEvent("studio:file-written", { detail: { path: "" } }));
+									window.dispatchEvent(new CustomEvent("studio:refresh"));
 								}
 							} else if (data.type === "tool-output-error" || data.type === "tool-input-error") {
 								const errorMsg = data.error || "Tool error";
@@ -465,7 +454,7 @@ export function useChatAgent() {
 			body: JSON.stringify({ action: "clear" }),
 		}).then(() => {
 			// Tell code-studio to refetch changes
-			window.dispatchEvent(new CustomEvent("studio:rollback"));
+			window.dispatchEvent(new CustomEvent("studio:refresh"));
 		}).catch(() => {
 			// Server reset failed — UI is already cleared, will resync on next poll
 		});
@@ -500,7 +489,7 @@ export function useChatAgent() {
 			}
 
 			// Notify CodeStudio to refresh files
-			window.dispatchEvent(new CustomEvent("studio:rollback"));
+			window.dispatchEvent(new CustomEvent("studio:refresh"));
 		} catch {
 			// Rollback failed
 		}

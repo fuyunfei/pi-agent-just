@@ -353,7 +353,7 @@ export function FileTreeSidebar() {
 			if (activeTabId === path) {
 				dispatch({ type: "CLOSE_TAB", tabId: path });
 			}
-			window.dispatchEvent(new CustomEvent("studio:file-written"));
+			window.dispatchEvent(new CustomEvent("studio:refresh"));
 		} catch {
 			// ignore
 		}

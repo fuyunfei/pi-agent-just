@@ -4,8 +4,11 @@ import {
 	type Dispatch,
 	type ReactNode,
 	createContext,
+	useCallback,
 	useContext,
+	useEffect,
 	useReducer,
+	useState,
 } from "react";
 import type { OverlayChange, StudioTab } from "./types";
 import { shouldDefaultPreview } from "./file-icons";
@@ -106,13 +109,51 @@ function studioReducer(state: StudioState, action: StudioAction): StudioState {
 
 const StateContext = createContext<StudioState>(initialState);
 const DispatchContext = createContext<Dispatch<StudioAction>>(() => {});
+const RefreshContext = createContext<() => void>(() => {});
 
 export function StudioProvider({ children }: { children: ReactNode }) {
 	const [state, dispatch] = useReducer(studioReducer, initialState);
+	const [loaded, setLoaded] = useState(false);
+
+	const refresh = useCallback(async () => {
+		try {
+			const res = await fetch("/api/sandbox");
+			const data = await res.json();
+			if (data.changes) {
+				dispatch({ type: "SET_CHANGES", changes: data.changes, mountPoint: data.mountPoint || "" });
+			}
+		} catch {
+			// ignore
+		}
+		setLoaded(true);
+	}, []);
+
+	// Fetch on mount + listen for refresh events
+	useEffect(() => {
+		refresh();
+		const onRefresh = () => refresh();
+		const onVisibility = () => { if (!document.hidden) refresh(); };
+		window.addEventListener("studio:refresh", onRefresh);
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => {
+			window.removeEventListener("studio:refresh", onRefresh);
+			document.removeEventListener("visibilitychange", onVisibility);
+		};
+	}, [refresh]);
+
+	// Close all tabs when changes become empty (after clear) — only after initial fetch
+	useEffect(() => {
+		if (loaded && state.changes.length === 0 && state.tabs.length > 0) {
+			dispatch({ type: "CLOSE_ALL_TABS" });
+		}
+	}, [loaded, state.changes, state.tabs.length]);
+
 	return (
 		<StateContext.Provider value={state}>
 			<DispatchContext.Provider value={dispatch}>
-				{children}
+				<RefreshContext.Provider value={refresh}>
+					{children}
+				</RefreshContext.Provider>
 			</DispatchContext.Provider>
 		</StateContext.Provider>
 	);
@@ -124,4 +165,8 @@ export function useStudioState() {
 
 export function useStudioDispatch() {
 	return useContext(DispatchContext);
+}
+
+export function useStudioRefresh() {
+	return useContext(RefreshContext);
 }

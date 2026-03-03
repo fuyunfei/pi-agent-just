@@ -598,7 +598,6 @@ export function ChatPanel() {
 		clearTimeout(clearTimerRef.current);
 		setConfirmClear(false);
 		clear();
-		window.dispatchEvent(new CustomEvent("studio:clear-all"));
 	}, [confirmClear, clear]);
 
 	useEffect(() => {
