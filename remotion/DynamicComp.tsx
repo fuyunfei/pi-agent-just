@@ -15,7 +15,11 @@ import {
 	delayRender,
 	getInputProps,
 } from "remotion";
+import { TransitionSeries, linearTiming } from "@remotion/transitions";
+import { fade } from "@remotion/transitions/fade";
 import { compileRemotionCode } from "../lib/remotion-compile";
+
+const CROSSFADE_FRAMES = 15; // 0.5s crossfade at 30fps
 
 // ---------------------------------------------------------------------------
 // Inject Tailwind CDN + Google Fonts into <head> for Lambda render environment
@@ -146,20 +150,28 @@ export const DynamicComp: React.FC = () => {
 		return <Scene />;
 	}
 
-	// Multi scene — compose with Sequence
-	let offset = 0;
+	// Multi scene — compose with crossfade transitions
 	return (
-		<AbsoluteFill>
-			{scenes.map((scene, i) => {
-				const from = offset;
-				offset += scene.durationInFrames;
+		<TransitionSeries>
+			{scenes.flatMap((scene, i) => {
 				const Scene = scene.Component;
-				return (
-					<Sequence key={i} from={from} durationInFrames={scene.durationInFrames}>
+				const elements: React.ReactNode[] = [];
+				if (i > 0) {
+					elements.push(
+						<TransitionSeries.Transition
+							key={`t-${i}`}
+							presentation={fade()}
+							timing={linearTiming({ durationInFrames: CROSSFADE_FRAMES })}
+						/>,
+					);
+				}
+				elements.push(
+					<TransitionSeries.Sequence key={`s-${i}`} durationInFrames={scene.durationInFrames}>
 						<Scene />
-					</Sequence>
+					</TransitionSeries.Sequence>,
 				);
+				return elements;
 			})}
-		</AbsoluteFill>
+		</TransitionSeries>
 	);
 };

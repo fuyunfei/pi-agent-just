@@ -296,6 +296,11 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}));
 	}, [sceneIndex]);
 
+	const switchScene = useCallback((nextIndex: number) => {
+		setCurrentIndex(nextIndex);
+		setCurrentFrame(0);
+	}, []);
+
 	// Listen for scene selection from sidebar or chat
 	useEffect(() => {
 		const handler = (e: Event) => {
@@ -307,13 +312,12 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				idx = compiled.findIndex((s) => s.filename === detail.filename);
 			}
 			if (idx != null && idx >= 0 && idx < compiled.length) {
-				setCurrentIndex(idx);
-				setCurrentFrame(0);
+				switchScene(idx);
 			}
 		};
 		window.addEventListener("studio:scene-select", handler);
 		return () => window.removeEventListener("studio:scene-select", handler);
-	}, [compiled]);
+	}, [compiled, switchScene]);
 
 	// Track frame updates — re-attach when Player remounts (playerKey changes)
 	useEffect(() => {
@@ -338,22 +342,17 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		setPlayerKey(keyRef.current);
 	}, [sceneIndex]);
 
-	// Auto-advance on scene end
+	// Auto-advance on scene end — with crossfade
 	useEffect(() => {
 		const player = playerRef.current;
 		if (!player) return;
 		const onEnded = () => {
-			if (sceneIndex < compiled.length - 1) {
-				setCurrentIndex(sceneIndex + 1);
-				setCurrentFrame(0);
-			} else {
-				setCurrentIndex(0);
-				setCurrentFrame(0);
-			}
+			const next = sceneIndex < compiled.length - 1 ? sceneIndex + 1 : 0;
+			switchScene(next);
 		};
 		player.addEventListener("ended", onEnded);
 		return () => player.removeEventListener("ended", onEnded);
-	}, [sceneIndex, compiled.length, playerKey]);
+	}, [sceneIndex, compiled.length, playerKey, switchScene]);
 
 	// Click video to toggle play/pause with visual feedback
 	const [showPlayIcon, setShowPlayIcon] = useState<"play" | "pause" | null>(null);
@@ -470,7 +469,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			<div
 				style={{
 					position: "relative", cursor: "pointer", aspectRatio: "16/9", width: "100%", maxWidth: 960,
-					borderRadius: 8, overflow: "hidden",
+					borderRadius: 8, overflow: "hidden", background: "#000",
 					boxShadow: "0 2px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(128,128,128,0.1)",
 				}}
 				onClick={togglePlay}
