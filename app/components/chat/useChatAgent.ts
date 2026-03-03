@@ -15,6 +15,11 @@ const nextId = () => `msg-${++messageId}`;
 
 const STORAGE_KEY = "pi-agent-chat";
 
+// Module-level flags: survive component remounts (tab switch, soft nav)
+// Only a full page reload resets these, which is the correct time to clear.
+let clearStarted = false;
+let clearDone = false;
+
 export function useChatAgent() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [status, setStatus] = useState<"ready" | "streaming" | "error">("ready");
@@ -22,23 +27,21 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
-	const clearStarted = useRef(false);
-	const clearDone = useRef(false);
 
-	// Fresh start on mount — guard against React Strict Mode double execution
+	// Fresh start on mount — module-level guard prevents re-clear on remount
 	useEffect(() => {
-		if (clearStarted.current) return;
-		clearStarted.current = true;
+		if (clearStarted) return;
+		clearStarted = true;
 		localStorage.removeItem(STORAGE_KEY);
 		fetch("/api/sandbox", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
 		}).then(() => {
-			clearDone.current = true;
+			clearDone = true;
 			window.dispatchEvent(new CustomEvent("studio:refresh"));
 		}).catch(() => {
-			clearDone.current = true;
+			clearDone = true;
 		});
 	}, []);
 
@@ -167,9 +170,9 @@ export function useChatAgent() {
 	const send = useCallback(
 		async (text: string, files?: FileUIPart[], displayText?: string) => {
 			// Wait for mount clear to finish
-			if (!clearDone.current) {
+			if (!clearDone) {
 				await new Promise<void>((r) => {
-					const check = () => clearDone.current ? r() : setTimeout(check, 30);
+					const check = () => clearDone ? r() : setTimeout(check, 30);
 					check();
 				});
 			}
