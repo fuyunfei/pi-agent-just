@@ -36,6 +36,8 @@ import {
 	BookOpenIcon,
 	BriefcaseIcon,
 	CheckCircle2Icon,
+	CheckIcon,
+	ChevronDownIcon,
 	ChevronRightIcon,
 	ClapperboardIcon,
 	FileEditIcon,
@@ -58,6 +60,7 @@ import {
 	XCircleIcon,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useChatAgent } from "./useChatAgent";
 import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
 import type { ChatMessage, ModelInfo, ToolCall } from "./types";
@@ -592,6 +595,52 @@ function ScrollOnNewMessage({ count }: { count: number }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Model selector                                                     */
+/* ------------------------------------------------------------------ */
+
+function ModelSelector({ models, current, onSwitch }: {
+	models: ModelInfo[];
+	current: ModelInfo | null;
+	onSwitch: (provider: string, id: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button
+					type="button"
+					className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+				>
+					<span className="truncate max-w-[120px]">{current?.label || "Model"}</span>
+					<ChevronDownIcon className="size-3 opacity-50" />
+				</button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-52 p-1" sideOffset={8}>
+				{models.map((m) => (
+					<button
+						key={`${m.provider}/${m.id}`}
+						type="button"
+						onClick={() => { onSwitch(m.provider, m.id); setOpen(false); }}
+						className={cn(
+							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors hover:bg-accent",
+							current?.id === m.id && current?.provider === m.provider
+								? "text-foreground font-medium"
+								: "text-muted-foreground",
+						)}
+					>
+						<span className="flex-1 truncate">{m.label}</span>
+						<span className="text-[10px] text-muted-foreground/50">{m.desc}</span>
+						{current?.id === m.id && current?.provider === m.provider && (
+							<CheckIcon className="size-3 text-emerald-500 flex-shrink-0" />
+						)}
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+/* ------------------------------------------------------------------ */
 /*  ChatPanel                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -795,6 +844,7 @@ export function ChatPanel() {
 						>
 							<PaperclipIcon className="size-3.5" />
 						</PromptInputButton>
+						<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} />
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
 								<span>{formatTokens(usage.totalTokens)} tokens</span>
