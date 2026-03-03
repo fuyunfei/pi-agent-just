@@ -3,7 +3,7 @@
  */
 
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { getOrCreateSingleton, getSessionId, getSessionStats, persistCurrentSnapshot } from "./singleton";
+import { getOrCreateSingleton, getSessionId, getSessionStats, getUserFiles, persistCurrentSnapshot } from "./singleton";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,10 +149,7 @@ export async function POST(req: Request) {
 					const usage = getSessionStats(sid);
 
 					// Push file state so client doesn't need to poll GET /api/sandbox
-					const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
-					const changes = overlayFs.getOverlayChanges()
-						.filter((c: { path: string }) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
-					const mountPoint = overlayFs.getMountPoint();
+					const { changes, mountPoint } = getUserFiles(sid);
 
 					console.log(`[route] done entry=${leafId ?? "?"} tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
 					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage, changes, mountPoint });

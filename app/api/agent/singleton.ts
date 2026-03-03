@@ -406,7 +406,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 	const existing = sessions.get(sessionId);
 	if (existing) {
 		existing.lastAccess = Date.now();
-		console.log(`[agent] reuse session=${sessionId.slice(0, 8)} (${existing.overlayFs.getOverlayChanges().length} files)`);
+		console.log(`[agent] reuse session=${sessionId.slice(0, 8)}`);
 		return existing;
 	}
 	console.log(`[agent] session=${sessionId.slice(0, 8)} NOT FOUND in memory (${sessions.size} active), creating new`);
@@ -588,6 +588,17 @@ export function persistCurrentSnapshot(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return;
 	persistSnapshot(s.overlayFs.snapshot(), sessionId);
+}
+
+/** Return user project files (only files under mountPoint, not system dirs). */
+export function getUserFiles(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) return { changes: [], mountPoint: "" };
+	const mountPoint = s.overlayFs.getMountPoint();
+	const prefix = mountPoint.endsWith("/") ? mountPoint : `${mountPoint}/`;
+	const changes = s.overlayFs.getOverlayChanges()
+		.filter((c) => c.path.startsWith(prefix));
+	return { changes, mountPoint };
 }
 
 /** Clear all state in-place — same instance, no orphan references. */
