@@ -13,11 +13,13 @@ const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp
 export async function GET(req: Request) {
 	try {
 		const sid = getSessionId(req);
+		console.log(`[sandbox] GET sid=${sid.slice(0, 8)}`);
 		const { overlayFs } = getOrCreateSingleton(sid);
 		const mountPoint = overlayFs.getMountPoint();
 		const changes = overlayFs
 			.getOverlayChanges()
 			.filter((c) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
+		console.log(`[sandbox] GET → ${changes.length} changes`);
 		return Response.json({ changes, mountPoint });
 	} catch (err) {
 		return Response.json(

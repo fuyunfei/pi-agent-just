@@ -38,7 +38,6 @@ import {
 	CheckCircle2Icon,
 	CheckIcon,
 	ChevronDownIcon,
-	ChevronRightIcon,
 	ClapperboardIcon,
 	FileEditIcon,
 	FileIcon,
@@ -206,62 +205,64 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	};
 }
 
+/** Extract filename from tool args */
+function toolFilename(tool: ToolCall): string | null {
+	const path = String(tool.args.path || tool.args.file_path || "");
+	if (!path) return null;
+	return path.split("/").pop() || path;
+}
+
 const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
-	const [expanded, setExpanded] = useState(false);
 	const display = useMemo(() => toolDisplayInfo(tool), [tool]);
+	const filename = useMemo(() => toolFilename(tool), [tool]);
 
-	const stateIcon =
-		tool.state === "running" ? (
-			<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-		) : tool.state === "error" ? (
-			<XCircleIcon className="size-3.5 text-red-500" />
-		) : (
-			<CheckCircle2Icon className="size-3.5 text-emerald-500" />
-		);
+	// Can this card open a file?
+	const canOpen = tool.state === "completed" && !!filename;
 
-	const hasOutput = !!tool.output;
+	const handleClick = useCallback(() => {
+		if (!canOpen || !filename) return;
+		window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
+	}, [canOpen, filename]);
 
-	// Scene card — click to expand/collapse, action buttons for navigate/retry
+	const handleRetry = useCallback((e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!filename) return;
+		window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+			detail: { filename, error: tool.output },
+		}));
+	}, [filename, tool.output]);
+
+	const isError = tool.state === "error";
+	const isRunning = tool.state === "running";
+
+	// Scene card — larger, richer styling
 	if (display.isScene) {
-		const isReady = tool.state === "completed";
-		const isError = tool.state === "error";
-		const path = String(tool.args.path || tool.args.file_path || "");
-		const filename = path.split("/").pop() || path;
-
-		const handleOpen = (e: React.MouseEvent) => {
-			e.stopPropagation();
-			window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
-		};
-		const handleRetry = (e: React.MouseEvent) => {
-			e.stopPropagation();
-			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename, error: tool.output },
-			}));
-		};
-
 		return (
 			<div className="my-1.5">
 				<button
 					type="button"
-					onClick={() => hasOutput && setExpanded((v) => !v)}
+					onClick={handleClick}
+					disabled={!canOpen}
 					className={cn(
 						"flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs text-left transition-colors",
-						tool.state === "running"
+						isRunning
 							? "border-border/60 bg-muted/30 cursor-default"
 							: isError
 								? "border-red-500/20 bg-red-500/5 hover:bg-red-500/10 cursor-pointer"
-								: "border-border/60 bg-muted/40 hover:bg-accent/50 hover:border-border cursor-pointer",
+								: canOpen
+									? "border-border/60 bg-muted/40 hover:bg-accent/50 hover:border-border cursor-pointer"
+									: "border-border/60 bg-muted/40 cursor-default",
 					)}
 				>
 					<div className={cn(
 						"flex size-7 items-center justify-center rounded-lg flex-shrink-0 transition-colors",
-						tool.state === "running"
+						isRunning
 							? "bg-muted text-muted-foreground"
 							: isError
 								? "bg-red-500/10 text-red-500"
 								: "bg-foreground/5 text-foreground/70",
 					)}>
-						{tool.state === "running" ? (
+						{isRunning ? (
 							<Loader2Icon className="size-3.5 animate-spin" />
 						) : isError ? (
 							<XCircleIcon className="size-3.5" />
@@ -274,7 +275,7 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 							{display.label}
 						</div>
 						<div className="text-[10px] text-muted-foreground/60 mt-0.5">
-							{tool.state === "running"
+							{isRunning
 								? (display.isEdit ? "Updating scene..." : "Creating scene...")
 								: isError
 									? "Failed"
@@ -290,38 +291,31 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 							<RotateCcwIcon className="size-3.5" />
 						</span>
 					)}
-					{isReady && (
-						<span onClick={handleOpen} className="flex size-6 items-center justify-center rounded-md hover:bg-accent text-muted-foreground/40 hover:text-foreground/70 flex-shrink-0 transition-colors" title="Open in editor">
-							<ExternalLinkIcon className="size-3.5" />
-						</span>
-					)}
-					{hasOutput && (
-						<ChevronRightIcon className={cn("size-3.5 text-muted-foreground/40 flex-shrink-0 transition-transform", expanded && "rotate-90")} />
-					)}
 				</button>
-				{expanded && tool.output && (
-					<div className={cn(
-						"mt-1 max-h-48 overflow-auto rounded-lg border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground",
-						isError && "border-red-500/20 text-red-400",
-					)}>
-						<pre className="whitespace-pre-wrap break-all">{tool.output}</pre>
-					</div>
-				)}
 			</div>
 		);
 	}
 
-	// Default tool card
+	// Default tool card — click opens file if applicable
+	const stateIcon = isRunning ? (
+		<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+	) : isError ? (
+		<XCircleIcon className="size-3.5 text-red-500" />
+	) : (
+		<CheckCircle2Icon className="size-3.5 text-emerald-500" />
+	);
+
 	return (
 		<div className="my-1">
 			<button
 				type="button"
-				onClick={() => hasOutput && setExpanded((v) => !v)}
-				disabled={!hasOutput}
+				onClick={handleClick}
+				disabled={!canOpen}
 				className={cn(
 					"flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-					"bg-muted/40 hover:bg-muted/70",
-					!hasOutput && "cursor-default",
+					canOpen
+						? "bg-muted/40 hover:bg-muted/70 cursor-pointer"
+						: "bg-muted/40 cursor-default",
 				)}
 			>
 				{stateIcon}
@@ -329,25 +323,10 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 				<span className="min-w-0 flex-1 truncate font-mono text-foreground/80">
 					{display.label}
 				</span>
-				{hasOutput && (
-					<ChevronRightIcon
-						className={cn(
-							"size-3.5 text-muted-foreground transition-transform",
-							expanded && "rotate-90",
-						)}
-					/>
+				{canOpen && (
+					<ExternalLinkIcon className="size-3 text-muted-foreground/30" />
 				)}
 			</button>
-			{expanded && tool.output && (
-				<div
-					className={cn(
-						"mt-1 max-h-48 overflow-auto rounded-lg border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground",
-						tool.state === "error" && "border-red-500/20 text-red-400",
-					)}
-				>
-					<pre className="whitespace-pre-wrap break-all">{tool.output}</pre>
-				</div>
-			)}
 		</div>
 	);
 });

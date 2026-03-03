@@ -171,7 +171,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 				debouncedRefresh();
 			}
 		};
-		const onVisibility = () => { if (!document.hidden) debouncedRefresh(); };
+		const onVisibility = () => { if (!document.hidden) { console.log("[studio] tab visible → refresh"); debouncedRefresh(); } };
 		window.addEventListener("studio:refresh", onRefresh);
 		document.addEventListener("visibilitychange", onVisibility);
 		return () => {
@@ -184,6 +184,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 	// Close all tabs when changes become empty (after clear) — only after initial fetch
 	useEffect(() => {
 		if (loaded && state.changes.length === 0 && state.tabs.length > 0) {
+			console.log(`[studio] CLOSE_ALL_TABS triggered (changes=0, tabs=${state.tabs.length})`);
 			dispatch({ type: "CLOSE_ALL_TABS" });
 		}
 	}, [loaded, state.changes, state.tabs.length]);

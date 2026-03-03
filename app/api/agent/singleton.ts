@@ -80,41 +80,34 @@ function loadPersistedSnapshot(sessionId: string): FsSnapshot | null {
 	}
 }
 
-const SYSTEM_PROMPT = `You are an expert motion graphics engineer. 
-You can chat and create animated videos using Remotion.
+const SYSTEM_PROMPT = `You are an expert motion graphics engineer using remotion. 
+You help users create and edit motion graphics clips as .tsx files.
 
-## Available tools
-- read: Read file contents. Use this instead of cat or head.
-- write: Create new files or complete rewrites.
-- edit: Make surgical edits to files (old text must match exactly). Use for small changes instead of write.
-- bash: Execute bash commands (prefer dedicated tools for file work)
-- ls: List directory contents
-- find: Find files by glob pattern
+## Tools
+
+Built-in:
+- read: Read file contents
+- bash: Execute bash commands
+- edit: Make surgical edits to files (find exact text and replace)
+- write: Create or overwrite files
 - grep: Search file contents for patterns
-- No access to npm, node, pnpm, pip, or any package manager
+- ls: List directory contents
 
-## Tool guidelines
-- Use read before editing — never edit blind
-- Use edit for precise changes, write for new files or full rewrites
-- Do NOT use bash (cat, sed, echo) for file operations — use the dedicated tools
-- Be concise — let the code speak for itself
 
-## Remotion overview
-- You create .tsx files for scenes. The preview panel auto-detects code importing from "remotion" and renders it with the built-in Remotion Player, Any main.tsx index.tsx for "composition" would render error. 
+## Code structure
+
+Each clip = one SELF-CONTAINED .tsx file. One file = one scene, ≈20 seconds.
+DO NOT create index.tsx, main.tsx, timeline.tsx, App.tsx, or any "composition" / "orchestration" files.
+DO NOT import between clip files. Each clip is independent — no shared state, no barrel exports.
+
+Name clips descriptively: intro.tsx, explosion.tsx, aftermath.tsx, etc.
+For longer content, split into multiple clips, for example:
+  intro.tsx (10s)
+  main-event.tsx (20s)
+  aftermath.tsx (15s)
+  conclusion.tsx (10s)
+
 - For long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director. 
-
-
-### Duration & multi-file scene design (CRITICAL)
-- Each .tsx file should be a **self-contained scene of 15–30 seconds** max. This is the sweet spot for visual quality.
-- For short requests (≤30s): create a single .tsx file.
-- For longer requests (>30s): split into **multiple scene files** — one per scene. Name them descriptively:
-  - \`scene-01-intro.tsx\` (15s)
-  - \`scene-02-main.tsx\` (20s)
-  - \`scene-03-outro.tsx\` (15s)
-- Within each file, use \`<Sequence>\` to sub-divide into segments with distinct animations.
-- Every animation must serve a purpose: reveal content, guide attention, or create rhythm. Never animate just to fill time.
-- Stillness is a tool — let text breathe and be readable. Constant motion feels cheap.
-- Maintain a consistent visual style (colors, fonts, layout) across all scene files.
 
 ### Config comment
 The FIRST line of the file MUST be:
@@ -245,7 +238,7 @@ Key patterns:
 
 ## Constraints
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
-- Do NOT create any "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
+- Do NOT create any main.tsx , index.tsx, for "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above`;
 
 // ---------------------------------------------------------------------------
@@ -380,7 +373,10 @@ interface Singleton {
 	lastAccess: number;
 }
 
-const sessions = new Map<string, Singleton>();
+// Persist across Next.js HMR — module-level Map gets wiped on hot reload
+const sessions: Map<string, Singleton> =
+	(globalThis as Record<string, unknown>).__piSessions as Map<string, Singleton>
+	?? ((globalThis as Record<string, unknown>).__piSessions = new Map<string, Singleton>());
 const MAX_SESSIONS = 10;
 const SESSION_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -410,8 +406,10 @@ export function getOrCreateSingleton(sessionId = "default") {
 	const existing = sessions.get(sessionId);
 	if (existing) {
 		existing.lastAccess = Date.now();
+		console.log(`[agent] reuse session=${sessionId.slice(0, 8)} (${existing.overlayFs.getOverlayChanges().length} files)`);
 		return existing;
 	}
+	console.log(`[agent] session=${sessionId.slice(0, 8)} NOT FOUND in memory (${sessions.size} active), creating new`);
 
 	evictSessions();
 
@@ -433,7 +431,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		? "openrouter"
 		: "anthropic";
 	const apiKey =
-		process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || "";
+		(process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || "").trim();
 	const modelId = process.env.OPENROUTER_API_KEY
 		? (process.env.PI_MODEL || "google/gemini-3-flash-preview")
 		: (process.env.PI_MODEL || "claude-haiku-4-5-20251001");
