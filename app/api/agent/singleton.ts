@@ -109,9 +109,9 @@ You can chat and create animated videos using Remotion.
   - \`scene-01-intro.tsx\` (15s)
   - \`scene-02-main.tsx\` (20s)
   - \`scene-03-outro.tsx\` (15s)
-- Within each file, use \`<Sequence>\` to sub-divide into 3–5 second segments with distinct animations.
-- NEVER stretch a single thin animation to fill time. Every frame must have something visually happening.
-- Use staggered delays between elements for richness. No static holds longer than 1 second.
+- Within each file, use \`<Sequence>\` to sub-divide into segments with distinct animations.
+- Every animation must serve a purpose: reveal content, guide attention, or create rhythm. Never animate just to fill time.
+- Stillness is a tool — let text breathe and be readable. Constant motion feels cheap.
 - Maintain a consistent visual style (colors, fonts, layout) across all scene files.
 
 ### Config comment
@@ -196,16 +196,17 @@ const QuoteScene = () => {
 
 const EndScene = () => {
   const frame = useCurrentFrame();
-  const glow = interpolate(Math.sin(frame / 10), [-1, 1], [10, 35]);
-  const breathe = interpolate(Math.sin(frame / 10), [-1, 1], [0.96, 1.04]);
+  const { fps } = useVideoConfig();
+  const scale = spring({ frame, fps, config: { damping: 20, stiffness: 80 } });
+  const textOpacity = interpolate(frame, [20, 40], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const fadeOut = interpolate(frame, [110, 150], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
     <AbsoluteFill className="flex items-center justify-center bg-black" style={{ opacity: fadeOut }}>
-      <div className="text-center" style={{ transform: \`scale(\${breathe})\` }}>
-        <div className="text-8xl font-black" style={{ fontFamily: "Outfit, sans-serif", background: "linear-gradient(135deg, #818cf8, #c084fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: \`drop-shadow(0 0 \${glow}px rgba(129,140,248,0.4))\` }}>
+      <div className="text-center" style={{ transform: \`scale(\${scale})\` }}>
+        <div className="text-8xl font-black" style={{ fontFamily: "Outfit, sans-serif", background: "linear-gradient(135deg, #818cf8, #c084fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
           ∞
         </div>
-        <p className="text-zinc-600 text-sm mt-6 tracking-[0.3em] uppercase" style={{ fontFamily: "Space Mono, monospace" }}>
+        <p className="text-zinc-600 text-sm mt-6 tracking-[0.3em] uppercase" style={{ fontFamily: "Space Mono, monospace", opacity: textOpacity }}>
           In perpetual motion
         </p>
       </div>
@@ -227,7 +228,7 @@ Key patterns:
 - Letter-by-letter stagger: \`spring({ frame: Math.max(0, frame - i * N) })\`
 - Word-by-word reveal: same pattern with \`interpolate\` for opacity + \`spring\` for Y
 - Gradient text: \`background: linear-gradient\` + \`WebkitBackgroundClip: "text"\`
-- Breathing glow: \`Math.sin(frame / speed)\` → \`interpolate\`
+- Entrance then hold: spring in, then let it sit — stillness after motion has impact
 - Fade to black: \`interpolate(frame, [N-40, N], [1, 0])\` on root opacity
 - Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
 
