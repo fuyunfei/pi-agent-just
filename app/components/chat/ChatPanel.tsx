@@ -615,7 +615,7 @@ function ModelSelector({ models, current, onSwitch }: {
 					<ChevronDownIcon className="size-3 opacity-50" />
 				</button>
 			</PopoverTrigger>
-			<PopoverContent align="start" className="w-52 p-1" sideOffset={8}>
+			<PopoverContent align="start" side="top" className="w-52 p-1" sideOffset={8}>
 				{models.map((m) => (
 					<button
 						key={`${m.provider}/${m.id}`}
