@@ -146,47 +146,68 @@ From "@remotion/three" + "three":
 
 React hooks: useState, useEffect, useMemo, useRef, useCallback
 
-### Reference example
+### Reference example — study this for quality and structure
 
 \`\`\`tsx
-// @remotion fps:30 duration:300
+// @remotion fps:30 duration:450
 import { useCurrentFrame, useVideoConfig, AbsoluteFill, interpolate, spring, Sequence } from "remotion";
 
-const TitleScene = () => {
+const Title = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const letters = "DEEPER".split("");
+  const letters = "MOTION".split("");
+  const lineW = interpolate(frame, [25, 55], [0, 280], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const subOpacity = interpolate(frame, [45, 65], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
-    <AbsoluteFill className="flex flex-col items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 60%, #1a1a3e 0%, #0a0a0f 70%)" }}>
+    <AbsoluteFill className="flex flex-col items-center justify-center" style={{ background: "radial-gradient(ellipse at 50% 55%, #1e1b4b 0%, #0a0a0f 70%)" }}>
       <div className="flex">
-        {letters.map((char, i) => {
-          const s = spring({ frame: Math.max(0, frame - i * 4), fps, config: { damping: 14 } });
-          return (
-            <span key={i} className="text-[140px] font-black text-white inline-block" style={{ fontFamily: "Playfair Display, serif", opacity: s, transform: \`translateY(\${(1 - s) * 50}px)\` }}>
-              {char}
-            </span>
-          );
+        {letters.map((c, i) => {
+          const s = spring({ frame: Math.max(0, frame - i * 4), fps, config: { damping: 14, stiffness: 120 } });
+          return <span key={i} className="text-[130px] font-black text-white inline-block" style={{ fontFamily: "Playfair Display, serif", opacity: s, transform: \`translateY(\${(1 - s) * 50}px)\` }}>{c}</span>;
         })}
       </div>
-      <div className="mt-4" style={{ width: interpolate(frame, [20, 60], [0, 300], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }), height: 2, background: "linear-gradient(90deg, transparent, #6366f1, transparent)" }} />
-      <Sequence from={40}>
-        <p className="text-xl tracking-[0.3em] uppercase mt-6" style={{ fontFamily: "Space Grotesk, sans-serif", color: "rgba(255,255,255,0.4)", opacity: interpolate(frame, [0, 15], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }}>
-          A meditation on time
+      <div className="mt-3" style={{ width: lineW, height: 2, background: "linear-gradient(90deg, transparent, #6366f1, transparent)" }} />
+      <Sequence from={45}>
+        <p className="text-lg tracking-[0.35em] uppercase mt-5 text-white/40" style={{ fontFamily: "Space Grotesk, sans-serif", opacity: subOpacity }}>
+          The art of movement
         </p>
       </Sequence>
     </AbsoluteFill>
   );
 };
 
+const QuoteScene = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const words = ["Everything", "moves.", "Nothing", "is", "still."];
+  return (
+    <AbsoluteFill className="flex items-center justify-center bg-black px-24">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 justify-center">
+        {words.map((w, i) => {
+          const d = i * 7;
+          const o = interpolate(frame, [d, d + 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+          const y = spring({ frame: Math.max(0, frame - d), fps, config: { damping: 16 } });
+          return <span key={i} className="text-5xl font-light text-white/90" style={{ fontFamily: "DM Sans, sans-serif", opacity: o, transform: \`translateY(\${(1 - y) * 25}px)\` }}>{w}</span>;
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const EndScene = () => {
   const frame = useCurrentFrame();
-  const glow = interpolate(Math.sin(frame / 10), [-1, 1], [10, 40]);
+  const glow = interpolate(Math.sin(frame / 10), [-1, 1], [10, 35]);
+  const breathe = interpolate(Math.sin(frame / 10), [-1, 1], [0.96, 1.04]);
+  const fadeOut = interpolate(frame, [110, 150], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
-    <AbsoluteFill className="flex items-center justify-center bg-black">
-      <div className="text-center" style={{ transform: \`scale(\${interpolate(Math.sin(frame / 10), [-1, 1], [0.95, 1.05])})\` }}>
+    <AbsoluteFill className="flex items-center justify-center bg-black" style={{ opacity: fadeOut }}>
+      <div className="text-center" style={{ transform: \`scale(\${breathe})\` }}>
         <div className="text-8xl font-black" style={{ fontFamily: "Outfit, sans-serif", background: "linear-gradient(135deg, #818cf8, #c084fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: \`drop-shadow(0 0 \${glow}px rgba(129,140,248,0.4))\` }}>
           ∞
         </div>
+        <p className="text-zinc-600 text-sm mt-6 tracking-[0.3em] uppercase" style={{ fontFamily: "Space Mono, monospace" }}>
+          In perpetual motion
+        </p>
       </div>
     </AbsoluteFill>
   );
@@ -194,18 +215,21 @@ const EndScene = () => {
 
 export const MyAnimation = () => (
   <AbsoluteFill className="bg-black">
-    <Sequence from={0} durationInFrames={150}><TitleScene /></Sequence>
-    <Sequence from={150} durationInFrames={150}><EndScene /></Sequence>
+    <Sequence from={0} durationInFrames={150}><Title /></Sequence>
+    <Sequence from={150} durationInFrames={150}><QuoteScene /></Sequence>
+    <Sequence from={300} durationInFrames={150}><EndScene /></Sequence>
   </AbsoluteFill>
 );
 \`\`\`
 
 Key patterns:
-- **Tailwind for layout** (\`className\`), **inline style for animated values** (\`opacity\`, \`transform\`, dynamic \`width\`)
-- Letter stagger: \`spring({ frame: Math.max(0, frame - i * 4) })\`
+- **Tailwind for layout/colors** (\`className\`), **inline style only for animated values** (\`opacity\`, \`transform\`, dynamic \`width\`)
+- Letter-by-letter stagger: \`spring({ frame: Math.max(0, frame - i * N) })\`
+- Word-by-word reveal: same pattern with \`interpolate\` for opacity + \`spring\` for Y
 - Gradient text: \`background: linear-gradient\` + \`WebkitBackgroundClip: "text"\`
-- Breathing: \`Math.sin(frame / speed)\` → \`interpolate\` for pulse/glow
-- Multiple fonts: Playfair Display (serif title), Space Grotesk (sans label), Outfit (display)
+- Breathing glow: \`Math.sin(frame / speed)\` → \`interpolate\`
+- Fade to black: \`interpolate(frame, [N-40, N], [1, 0])\` on root opacity
+- Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
 
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`

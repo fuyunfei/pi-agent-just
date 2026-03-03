@@ -22,10 +22,13 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
+	const clearStarted = useRef(false);
 	const clearDone = useRef(false);
 
-	// Fresh start on mount (refresh = new) — must complete before first send
+	// Fresh start on mount — guard against React Strict Mode double execution
 	useEffect(() => {
+		if (clearStarted.current) return;
+		clearStarted.current = true;
 		localStorage.removeItem(STORAGE_KEY);
 		fetch("/api/sandbox", {
 			method: "POST",
