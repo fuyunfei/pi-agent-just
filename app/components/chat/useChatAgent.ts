@@ -311,6 +311,9 @@ export function useChatAgent() {
 
 						try {
 							const data = JSON.parse(jsonStr);
+							if (data.type?.startsWith("tool")) {
+								console.log(`[sse] ${data.type}`, data.toolCallId, data.toolName || "");
+							}
 
 							if (data.type === "text-delta" && data.delta) {
 								appendText(data.delta);
@@ -333,6 +336,7 @@ export function useChatAgent() {
 									isReasoningStreaming: false,
 								}));
 							} else if (data.type === "tool-call-started" && data.toolCallId) {
+								console.log(`[tool] STARTED ${data.toolName} id=${data.toolCallId} hasInput=${!!data.input} keys=${Object.keys(data.input || {}).join(",")}`);
 								toolNameById.set(data.toolCallId, data.toolName || "tool");
 								const args = (data.input || {}) as Record<string, unknown>;
 								// Create card or update if already created by tool-input-available
@@ -340,8 +344,10 @@ export function useChatAgent() {
 									(p) => p.type === "tool" && p.tool.id === data.toolCallId,
 								);
 								if (existing) {
+									console.log(`[tool] STARTED → update existing card`);
 									updateTool(data.toolCallId, (t) => ({ ...t, args: { ...t.args, ...args } }));
 								} else {
+									console.log(`[tool] STARTED → create new card`);
 									addTool({
 										id: data.toolCallId,
 										toolName: data.toolName || "tool",
@@ -350,14 +356,17 @@ export function useChatAgent() {
 									});
 								}
 							} else if (data.type === "tool-input-available" && data.toolCallId) {
+								console.log(`[tool] INPUT ${toolNameById.get(data.toolCallId)} id=${data.toolCallId}`);
 								const args = (data.input || {}) as Record<string, unknown>;
 								// Update existing card or create if tool-call-started hasn't arrived yet
 								const existing = partsTracker.find(
 									(p) => p.type === "tool" && p.tool.id === data.toolCallId,
 								);
 								if (existing) {
+									console.log(`[tool] INPUT → update existing card`);
 									updateTool(data.toolCallId, (t) => ({ ...t, args }));
 								} else {
+									console.log(`[tool] INPUT → create new card (started not yet received)`);
 									toolNameById.set(data.toolCallId, data.toolName || "tool");
 									addTool({
 										id: data.toolCallId,
@@ -367,6 +376,7 @@ export function useChatAgent() {
 									});
 								}
 							} else if (data.type === "tool-output-available" && data.toolCallId) {
+								console.log(`[tool] OUTPUT ${toolNameById.get(data.toolCallId)} id=${data.toolCallId}`);
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
 								// Refresh file list after file-changing tools complete
@@ -375,6 +385,7 @@ export function useChatAgent() {
 									window.dispatchEvent(new CustomEvent("studio:refresh"));
 								}
 							} else if (data.type === "tool-output-error" || data.type === "tool-input-error") {
+								console.log(`[tool] ERROR ${data.toolCallId} ${data.error}`);
 								const errorMsg = data.error || "Tool error";
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "error", output: String(errorMsg) }));
 							} else if (data.type === "error") {

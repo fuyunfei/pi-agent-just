@@ -103,6 +103,7 @@ function isRemotionSceneTool(tool: ToolCall): boolean {
 		return /from\s+["']remotion["']/.test(content);
 	}
 	if (name === "edit" || name === "editFile") {
+		if (!hasArgs) return true;
 		const path = String(tool.args.path || tool.args.file_path || "");
 		const filename = path.split("/").pop() || "";
 		const content = String(tool.args.new_string || tool.args.old_string || "");
@@ -168,7 +169,7 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		if (isRemotionSceneTool(tool)) {
 			return {
 				icon: <PlayIcon className="size-3 fill-current" />,
-				label: sceneLabel(short),
+				label: short ? sceneLabel(short) : "Updating scene",
 				isScene: true,
 				isEdit: true,
 			};
