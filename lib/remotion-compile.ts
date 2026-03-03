@@ -193,7 +193,7 @@ export function compileRemotionCode(code: string): CompilationResult {
 
 		const plugin = createStripModuleSyntax(
 			(name) => { defaultExportName = name; },
-			(name) => { if (!namedExportName) namedExportName = name; },
+			(name) => { namedExportName = name; },
 		);
 		const babelOpts = { presets: ["react", "typescript"], plugins: [plugin], sourceType: "module" as const, filename: "dynamic-animation.tsx" };
 

@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* Tailwind CDN for AI-generated Remotion components */}
-        <script src="https://cdn.tailwindcss.com" async />
+        <script src="https://cdn.tailwindcss.com" />
         {/* Google Fonts for AI-generated scenes */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

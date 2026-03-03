@@ -238,7 +238,7 @@ Key patterns:
 - Use \`spring()\` for organic motion, \`interpolate()\` for linear progress
 - Always use \`{ extrapolateLeft: "clamp", extrapolateRight: "clamp" }\` with interpolate
 - Tailwind CSS is available — you can use \`className\` with any Tailwind utility classes
-- Available fonts: Inter, Playfair Display, Space Grotesk, DM Sans, Outfit, Space Mono (use via \`fontFamily\` or Tailwind \`font-\`)
+- Available fonts: Inter, Playfair Display, Space Grotesk, DM Sans, Outfit, Space Mono (use via \`style={{ fontFamily: "Font Name, serif" }}\`)
 - Set backgroundColor on AbsoluteFill from frame 0
 - All constants (colors, text, timing) defined INSIDE the component body
 - Do NOT use any packages beyond the imports listed above
