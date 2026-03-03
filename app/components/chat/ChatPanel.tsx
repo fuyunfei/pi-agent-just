@@ -40,6 +40,7 @@ import {
 	ClapperboardIcon,
 	FileEditIcon,
 	FileIcon,
+	ExternalLinkIcon,
 	FilmIcon,
 	GraduationCapIcon,
 	HeartIcon,
@@ -215,32 +216,29 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 
 	const hasOutput = !!tool.output;
 
-	// Scene card — styled like sidebar scene list
+	// Scene card — click to expand/collapse, action buttons for navigate/retry
 	if (display.isScene) {
 		const isReady = tool.state === "completed";
 		const isError = tool.state === "error";
+		const path = String(tool.args.path || tool.args.file_path || "");
+		const filename = path.split("/").pop() || path;
 
-		const handleSceneClick = () => {
-			if (isReady) {
-				const path = String(tool.args.path || tool.args.file_path || "");
-				const filename = path.split("/").pop() || path;
-				window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
-			} else if (isError && tool.output) {
-				// Send error to AI for retry
-				const path = String(tool.args.path || tool.args.file_path || "");
-				const filename = path.split("/").pop() || path;
-				window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-					detail: { filename, error: tool.output },
-				}));
-			}
+		const handleOpen = (e: React.MouseEvent) => {
+			e.stopPropagation();
+			window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
+		};
+		const handleRetry = (e: React.MouseEvent) => {
+			e.stopPropagation();
+			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+				detail: { filename, error: tool.output },
+			}));
 		};
 
 		return (
 			<div className="my-1.5">
 				<button
 					type="button"
-					disabled={tool.state === "running"}
-					onClick={handleSceneClick}
+					onClick={() => hasOutput && setExpanded((v) => !v)}
 					className={cn(
 						"flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs text-left transition-colors",
 						tool.state === "running"
@@ -261,7 +259,7 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 						{tool.state === "running" ? (
 							<Loader2Icon className="size-3.5 animate-spin" />
 						) : isError ? (
-							<RotateCcwIcon className="size-3.5" />
+							<XCircleIcon className="size-3.5" />
 						) : (
 							<FilmIcon className="size-3.5" />
 						)}
@@ -274,7 +272,7 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 							{tool.state === "running"
 								? (display.isEdit ? "Updating scene..." : "Creating scene...")
 								: isError
-									? "Failed — click to retry"
+									? "Failed"
 									: display.isEdit
 										? "Scene updated"
 										: display.sceneDuration
@@ -282,10 +280,28 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 											: "Scene created"}
 						</div>
 					</div>
+					{isError && (
+						<span onClick={handleRetry} className="flex size-6 items-center justify-center rounded-md hover:bg-red-500/10 text-red-500/60 hover:text-red-500 flex-shrink-0 transition-colors" title="Ask AI to fix">
+							<RotateCcwIcon className="size-3.5" />
+						</span>
+					)}
 					{isReady && (
-						<PlayIcon className="size-3 text-muted-foreground/40 flex-shrink-0" />
+						<span onClick={handleOpen} className="flex size-6 items-center justify-center rounded-md hover:bg-accent text-muted-foreground/40 hover:text-foreground/70 flex-shrink-0 transition-colors" title="Open in editor">
+							<ExternalLinkIcon className="size-3.5" />
+						</span>
+					)}
+					{hasOutput && (
+						<ChevronRightIcon className={cn("size-3.5 text-muted-foreground/40 flex-shrink-0 transition-transform", expanded && "rotate-90")} />
 					)}
 				</button>
+				{expanded && tool.output && (
+					<div className={cn(
+						"mt-1 max-h-48 overflow-auto rounded-lg border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground",
+						isError && "border-red-500/20 text-red-400",
+					)}>
+						<pre className="whitespace-pre-wrap break-all">{tool.output}</pre>
+					</div>
+				)}
 			</div>
 		);
 	}
