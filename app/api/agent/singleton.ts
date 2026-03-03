@@ -146,88 +146,165 @@ From "@remotion/three" + "three":
 
 React hooks: useState, useEffect, useMemo, useRef, useCallback
 
-### Reference example — study this carefully
+### Reference example — study this carefully for quality, structure, and technique
 
 \`\`\`tsx
 // @remotion fps:30 duration:450
 import { useCurrentFrame, useVideoConfig, AbsoluteFill, interpolate, spring, Sequence } from "remotion";
 
-const Title = () => {
+// --- Reusable animated background: floating particle grid ---
+const ParticleField = ({ count = 40, color = "rgba(255,255,255,0.08)" }: { count?: number; color?: string }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const scale = spring({ frame, fps, config: { damping: 12, stiffness: 100 } });
-  const opacity = interpolate(frame, [0, 20], [0, 1], { extrapolateRight: "clamp" });
-  const y = interpolate(frame, [0, 25], [40, 0], { extrapolateRight: "clamp" });
+  const particles = useMemo(() =>
+    Array.from({ length: count }, (_, i) => ({
+      x: (i * 7919) % 100, y: (i * 6271) % 100,
+      size: 2 + (i % 4), speed: 0.3 + (i % 5) * 0.15,
+      phase: i * 1.8,
+    })), [count]);
   return (
-    <AbsoluteFill className="flex items-center justify-center">
-      <div style={{ opacity, transform: \`scale(\${scale}) translateY(\${y}px)\` }}>
-        <h1 className="text-[120px] font-bold tracking-tight text-white" style={{ fontFamily: "Playfair Display, serif" }}>
-          Deeper
-        </h1>
-        <div className="h-1 bg-indigo-500 mx-auto mt-4" style={{ width: interpolate(frame, [15, 40], [0, 200], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }} />
-      </div>
+    <AbsoluteFill style={{ overflow: "hidden" }}>
+      {particles.map((p, i) => (
+        <div key={i} style={{
+          position: "absolute",
+          left: \`\${p.x}%\`, top: \`\${(p.y + frame * p.speed * 0.3) % 110 - 5}%\`,
+          width: p.size, height: p.size, borderRadius: "50%", background: color,
+          opacity: interpolate(Math.sin(frame / 20 + p.phase), [-1, 1], [0.3, 1]),
+        }} />
+      ))}
     </AbsoluteFill>
   );
 };
 
-const QuoteScene = () => {
+// --- Scene 1: Cinematic title with letter-by-letter reveal ---
+const TitleScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const words = ["The", "only", "way", "out", "is", "through."];
-  return (
-    <AbsoluteFill className="flex items-center justify-center bg-zinc-950">
-      <div className="flex gap-4 flex-wrap justify-center max-w-4xl px-20">
-        {words.map((word, i) => {
-          const delay = i * 6;
-          const wordOpacity = interpolate(frame, [delay, delay + 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-          const wordY = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 15 } });
-          return (
-            <span key={i} className="text-6xl font-light text-white" style={{ fontFamily: "Space Grotesk, sans-serif", opacity: wordOpacity, transform: \`translateY(\${(1 - wordY) * 30}px)\` }}>
-              {word}
-            </span>
-          );
-        })}
-      </div>
-    </AbsoluteFill>
-  );
-};
+  const letters = "CHRONOS".split("");
+  const subtitle = "A meditation on time";
 
-const EndScene = () => {
-  const frame = useCurrentFrame();
-  const pulse = interpolate(Math.sin(frame / 8), [-1, 1], [0.9, 1.1]);
-  const glow = interpolate(Math.sin(frame / 8), [-1, 1], [10, 30]);
+  const bgShift = interpolate(frame, [0, 150], [0, 30], { extrapolateRight: "clamp" });
+  const subtitleOpacity = interpolate(frame, [50, 70], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const lineWidth = interpolate(frame, [40, 80], [0, 300], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
   return (
-    <AbsoluteFill className="flex items-center justify-center bg-black">
-      <div className="text-center" style={{ transform: \`scale(\${pulse})\` }}>
-        <div className="text-8xl font-black text-indigo-400" style={{ fontFamily: "Outfit, sans-serif", textShadow: \`0 0 \${glow}px rgba(99,102,241,0.6)\` }}>
-          FIN
+    <AbsoluteFill style={{ background: \`radial-gradient(ellipse at 50% \${50 + bgShift}%, #1a1a3e 0%, #0a0a0f 70%)\` }}>
+      <ParticleField color="rgba(99,102,241,0.12)" />
+      <AbsoluteFill className="flex flex-col items-center justify-center gap-6">
+        <div className="flex">
+          {letters.map((char, i) => {
+            const delay = i * 4;
+            const s = spring({ frame: Math.max(0, frame - delay), fps, config: { damping: 14, stiffness: 120 } });
+            const o = interpolate(frame, [delay, delay + 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            return (
+              <span key={i} style={{
+                fontFamily: "Playfair Display, serif", fontSize: 140, fontWeight: 900, color: "#fff",
+                display: "inline-block", opacity: o, transform: \`translateY(\${(1 - s) * 60}px) rotateX(\${(1 - s) * 40}deg)\`,
+                textShadow: "0 0 40px rgba(99,102,241,0.3)",
+              }}>{char}</span>
+            );
+          })}
         </div>
-        <p className="text-zinc-500 text-lg mt-6 tracking-[0.3em] uppercase" style={{ fontFamily: "Space Mono, monospace" }}>
-          Thank you for watching
+        <div style={{ width: lineWidth, height: 2, background: "linear-gradient(90deg, transparent, #6366f1, transparent)" }} />
+        <p style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 28, color: "rgba(255,255,255,0.5)", letterSpacing: 8, textTransform: "uppercase", opacity: subtitleOpacity }}>
+          {subtitle}
+        </p>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
+// --- Scene 2: Split-screen with animated counter + text ---
+const DataScene = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const countTo = 13800000000;
+  const count = Math.floor(interpolate(frame, [0, 90], [0, countTo], { extrapolateRight: "clamp" }));
+  const formatted = count.toLocaleString();
+  const panelSlide = spring({ frame, fps, config: { damping: 18, stiffness: 80 } });
+  const textFade = interpolate(frame, [30, 50], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
+  return (
+    <AbsoluteFill className="flex" style={{ background: "#08080f" }}>
+      <div className="flex-1 flex flex-col items-center justify-center" style={{ transform: \`translateX(\${(1 - panelSlide) * -100}px)\`, opacity: panelSlide }}>
+        <p className="text-zinc-600 text-lg mb-2 tracking-widest uppercase" style={{ fontFamily: "Space Mono, monospace" }}>
+          Years since the Big Bang
+        </p>
+        <div className="text-7xl font-bold text-white tabular-nums" style={{ fontFamily: "Outfit, sans-serif" }}>
+          {formatted}
+        </div>
+      </div>
+      <div className="w-px bg-zinc-800" />
+      <div className="flex-1 flex flex-col items-center justify-center px-16" style={{ opacity: textFade }}>
+        <p className="text-2xl text-zinc-300 leading-relaxed text-center" style={{ fontFamily: "DM Sans, sans-serif" }}>
+          Time is not a line.{" "}
+          <span className="text-indigo-400 font-semibold">It is a field</span>{" "}
+          — stretching, compressing, curving around mass and energy.
         </p>
       </div>
     </AbsoluteFill>
   );
 };
 
-export const MyAnimation = () => {
+// --- Scene 3: Closing with breathing glow + fade out ---
+const EndScene = () => {
+  const frame = useCurrentFrame();
+  const breathe = interpolate(Math.sin(frame / 12), [-1, 1], [0.95, 1.05]);
+  const glow = interpolate(Math.sin(frame / 12), [-1, 1], [15, 45]);
+  const fadeOut = interpolate(frame, [110, 150], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const dotCount = 60;
+
   return (
-    <AbsoluteFill className="bg-zinc-950">
-      <Sequence from={0} durationInFrames={150}><Title /></Sequence>
-      <Sequence from={150} durationInFrames={150}><QuoteScene /></Sequence>
-      <Sequence from={300} durationInFrames={150}><EndScene /></Sequence>
+    <AbsoluteFill className="flex items-center justify-center bg-black" style={{ opacity: fadeOut }}>
+      {/* Orbital dots */}
+      {Array.from({ length: dotCount }, (_, i) => {
+        const angle = (i / dotCount) * Math.PI * 2 + frame * 0.008;
+        const radius = 250 + Math.sin(i * 0.5 + frame * 0.02) * 40;
+        return (
+          <div key={i} style={{
+            position: "absolute", width: 3, height: 3, borderRadius: "50%",
+            background: \`rgba(99,102,241,\${0.2 + Math.sin(i + frame * 0.05) * 0.15})\`,
+            left: \`calc(50% + \${Math.cos(angle) * radius}px)\`,
+            top: \`calc(50% + \${Math.sin(angle) * radius}px)\`,
+          }} />
+        );
+      })}
+      <div className="text-center z-10" style={{ transform: \`scale(\${breathe})\` }}>
+        <div className="text-8xl font-black tracking-tight" style={{
+          fontFamily: "Outfit, sans-serif",
+          background: "linear-gradient(135deg, #818cf8, #c084fc)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          filter: \`drop-shadow(0 0 \${glow}px rgba(129,140,248,0.4))\`,
+        }}>
+          ∞
+        </div>
+        <p className="text-zinc-600 mt-8 text-sm tracking-[0.4em] uppercase" style={{ fontFamily: "Space Mono, monospace" }}>
+          Time has no end
+        </p>
+      </div>
     </AbsoluteFill>
   );
 };
+
+export const MyAnimation = () => (
+  <AbsoluteFill className="bg-black">
+    <Sequence from={0} durationInFrames={150}><TitleScene /></Sequence>
+    <Sequence from={150} durationInFrames={150}><DataScene /></Sequence>
+    <Sequence from={300} durationInFrames={150}><EndScene /></Sequence>
+  </AbsoluteFill>
+);
 \`\`\`
 
-Key patterns:
-- **Tailwind for layout/typography** (\`className\`), **inline style for animated values** (\`opacity\`, \`transform\`)
-- \`spring()\` for organic motion, \`interpolate()\` with clamp for linear — never raw \`frame / N\`
-- Multiple fonts mixed: Playfair Display (titles), Space Grotesk (body), Outfit (display), Space Mono (mono)
-- Word-by-word staggered reveals using \`delay = i * N\`
-- Pulsing/glowing effects via \`Math.sin(frame / speed)\`
-- Each \`<Sequence>\` is a full-screen scene with its own \`AbsoluteFill\`
+Key techniques to learn:
+- **Tailwind for layout** (\`className\`), **inline style only for animated values** (\`opacity\`, \`transform\`, \`width\`, \`filter\`)
+- **Reusable components** (ParticleField) for backgrounds — keeps scenes DRY
+- **Letter-by-letter stagger**: split string → map with \`delay = i * N\` → \`spring\` per letter
+- **Radial gradient backgrounds** that animate with \`interpolate\` → depth, not flat
+- **Animated counters**: \`interpolate(frame, [0, N], [0, target])\` + \`toLocaleString()\`
+- **Orbital dots**: trigonometry (\`Math.cos/sin\`) for circular motion
+- **Gradient text**: \`background: linear-gradient\` + \`WebkitBackgroundClip: "text"\`
+- **Breathing/pulsing**: \`Math.sin(frame / speed)\` mapped via \`interpolate\`
+- **Fade to black**: \`interpolate(frame, [N-40, N], [1, 0])\` on root opacity
+- **Multiple fonts** with purpose: serif for titles, sans for body, mono for data
 
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`
