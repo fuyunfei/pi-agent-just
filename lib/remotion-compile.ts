@@ -49,7 +49,7 @@ export interface CompilationResult {
 // ---------------------------------------------------------------------------
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function createStripModuleSyntax(onDefault: (name: string) => void) {
+function createStripModuleSyntax(onDefault: (name: string) => void, onNamed: (name: string) => void) {
 	return ({ types: t }: any) => ({
 		visitor: {
 			// Remove all imports — globals are injected via new Function() params
@@ -76,10 +76,17 @@ function createStripModuleSyntax(onDefault: (name: string) => void) {
 					);
 				}
 			},
-			// export const/function/class → strip export keyword
+			// export const/function/class → strip export keyword, track name
 			ExportNamedDeclaration(path: any) {
 				if (path.node.declaration) {
-					path.replaceWith(path.node.declaration);
+					const decl = path.node.declaration;
+					// Track the first exported name as potential component
+					if (decl.type === "VariableDeclaration" && decl.declarations?.[0]?.id?.name) {
+						onNamed(decl.declarations[0].id.name);
+					} else if ((decl.type === "FunctionDeclaration" || decl.type === "ClassDeclaration") && decl.id?.name) {
+						onNamed(decl.id.name);
+					}
+					path.replaceWith(decl);
 				} else {
 					path.remove();
 				}
@@ -175,6 +182,7 @@ export function compileRemotionCode(code: string): CompilationResult {
 	try {
 		let src = code;
 		let defaultExportName: string | null = null;
+		let namedExportName: string | null = null;
 
 		// Fix invalid "export default const/let/var X" (common AI mistake)
 		const edcMatch = src.match(/export\s+default\s+(?:const|let|var)\s+(\w+)/);
@@ -183,7 +191,10 @@ export function compileRemotionCode(code: string): CompilationResult {
 			defaultExportName = edcMatch[1];
 		}
 
-		const plugin = createStripModuleSyntax((name) => { defaultExportName = name; });
+		const plugin = createStripModuleSyntax(
+			(name) => { defaultExportName = name; },
+			(name) => { if (!namedExportName) namedExportName = name; },
+		);
 		const babelOpts = { presets: ["react", "typescript"], plugins: [plugin], sourceType: "module" as const, filename: "dynamic-animation.tsx" };
 
 		let transpiled: ReturnType<typeof Babel.transform>;
@@ -205,10 +216,10 @@ export function compileRemotionCode(code: string): CompilationResult {
 			return { Component: null, error: "Transpilation failed" };
 		}
 
-		// Default export found → return the component directly.
-		// No export → wrap entire code as a component body (backward compat).
-		const finalCode = defaultExportName
-			? `${transpiled.code}\nreturn ${defaultExportName};`
+		// Use default export, or named export, or wrap as component body (backward compat).
+		const exportName = defaultExportName || namedExportName;
+		const finalCode = exportName
+			? `${transpiled.code}\nreturn ${exportName};`
 			: `var _Comp = function _Comp() {\n${transpiled.code}\n};\nreturn _Comp;`;
 
 		const createComponent = new Function(...PARAM_NAMES, finalCode);
