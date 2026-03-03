@@ -95,15 +95,14 @@ function isRemotionSceneTool(tool: ToolCall): boolean {
 	const name = tool.toolName;
 	const hasArgs = Object.keys(tool.args).length > 0;
 
-	// Write tool: always treat as scene (this app is Remotion-focused)
-	// During streaming args are empty — show scene card anyway
+	// Don't guess during streaming — wait for args to classify correctly
+	if (!hasArgs) return false;
+
 	if (name === "write" || name === "writeFile" || name === "createFile") {
-		if (!hasArgs) return true; // streaming, no args yet — assume scene
 		const content = String(tool.args.content || "");
 		return /from\s+["']remotion["']/.test(content);
 	}
 	if (name === "edit" || name === "editFile") {
-		if (!hasArgs) return true;
 		const path = String(tool.args.path || tool.args.file_path || "");
 		const filename = path.split("/").pop() || "";
 		const content = String(tool.args.new_string || tool.args.old_string || "");
@@ -283,11 +282,6 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 											: "Scene created"}
 						</div>
 					</div>
-					{display.sceneDuration && isReady && (
-						<span className="text-[11px] text-muted-foreground/50 tabular-nums flex-shrink-0">
-							{display.sceneDuration}
-						</span>
-					)}
 					{isReady && (
 						<PlayIcon className="size-3 text-muted-foreground/40 flex-shrink-0" />
 					)}
