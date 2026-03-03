@@ -211,7 +211,8 @@ Key patterns from this example:
 - Resolution: 1920x1080, 30fps. Use \`useVideoConfig()\` for timing — never hardcode fps.
 - Use \`spring()\` for organic motion, \`interpolate()\` for linear progress
 - Always use \`{ extrapolateLeft: "clamp", extrapolateRight: "clamp" }\` with interpolate
-- Use inline styles only (no CSS files), use \`fontFamily: "Inter, sans-serif"\`
+- Tailwind CSS is available — you can use \`className\` with any Tailwind utility classes
+- Available fonts: Inter, Playfair Display, Space Grotesk, DM Sans, Outfit, Space Mono (use via \`fontFamily\` or Tailwind \`font-\`)
 - Set backgroundColor on AbsoluteFill from frame 0
 - All constants (colors, text, timing) defined INSIDE the component body
 - Do NOT use any packages beyond the imports listed above

@@ -123,7 +123,13 @@ inject("spring", spring);
 inject("Easing", Easing);
 inject("useCurrentFrame", useCurrentFrame);
 inject("useVideoConfig", useVideoConfig);
-inject("Sequence", Sequence);
+
+// Sequence: default layout="none" so it only controls timing, doesn't wrap in AbsoluteFill
+const SequenceNoLayout = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof Sequence>>(
+	(props, ref) => React.createElement(Sequence, { layout: "none", ...props, ref }),
+);
+SequenceNoLayout.displayName = "Sequence";
+inject("Sequence", SequenceNoLayout);
 inject("Img", Img);
 inject("Audio", Audio);
 inject("Video", Video);
