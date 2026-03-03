@@ -394,6 +394,11 @@ export function useChatAgent() {
 								console.log(`[tool] OUTPUT ${toolNameById.get(data.toolCallId)} id=${data.toolCallId}`);
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
 								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
+								// Interim refresh for real-time feedback (debounced fetch)
+								const tn = toolNameById.get(data.toolCallId);
+								if (tn === "write" || tn === "writeFile" || tn === "edit" || tn === "bash") {
+									window.dispatchEvent(new CustomEvent("studio:refresh"));
+								}
 							} else if (data.type === "tool-output-error" || data.type === "tool-input-error") {
 								console.log(`[tool] ERROR ${data.toolCallId} ${data.error}`);
 								const errorMsg = data.error || "Tool error";
