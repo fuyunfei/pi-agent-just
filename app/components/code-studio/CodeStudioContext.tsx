@@ -81,12 +81,30 @@ function studioReducer(state: StudioState, action: StudioAction): StudioState {
 		case "TOGGLE_SIDEBAR":
 			return { ...state, sidebarOpen: !state.sidebarOpen };
 
-		case "SET_CHANGES":
-			return {
+		case "SET_CHANGES": {
+			let newState = {
 				...state,
 				changes: action.changes,
 				mountPoint: action.mountPoint,
 			};
+			// Auto-open first Remotion file if no active tab
+			if (!newState.activeTabId) {
+				const first = action.changes.find(
+					(c) => c.type !== "deleted" && c.content && /from\s+["']remotion["']/.test(c.content),
+				);
+				if (first) {
+					const name = first.path.split("/").pop() || first.path;
+					const tab: StudioTab = {
+						id: first.path,
+						path: first.path,
+						name,
+						mode: "preview",
+					};
+					newState = { ...newState, tabs: [...newState.tabs, tab], activeTabId: tab.id };
+				}
+			}
+			return newState;
+		}
 
 		case "TOGGLE_PREVIEW": {
 			return {
@@ -119,11 +137,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 		try {
 			const res = await fetch("/api/sandbox");
 			const data = await res.json();
+			console.log(`[refresh] changes=${data.changes?.length ?? 0} mountPoint=${data.mountPoint ?? ""}`);
 			if (data.changes) {
 				dispatch({ type: "SET_CHANGES", changes: data.changes, mountPoint: data.mountPoint || "" });
 			}
-		} catch {
-			// ignore
+		} catch (err) {
+			console.log(`[refresh] error`, err);
 		}
 		setLoaded(true);
 	}, []);

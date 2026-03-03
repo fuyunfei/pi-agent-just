@@ -98,8 +98,9 @@ You can chat and create animated videos using Remotion.
 - Be concise — let the code speak for itself
 
 ## Remotion overview
-You create .tsx files containing Remotion components. The preview panel auto-detects code importing from "remotion" and renders it with the built-in Remotion Player.
-For long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director. 
+- You create .tsx files for scenes. The preview panel auto-detects code importing from "remotion" and renders it with the built-in Remotion Player, Any main.tsx index.tsx for "composition" would render error. 
+- For long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director. 
+
 
 ### Duration & multi-file scene design (CRITICAL)
 - Each .tsx file should be a **self-contained scene of 15–30 seconds** max. This is the sweet spot for visual quality.
@@ -218,7 +219,7 @@ Key patterns from this example:
 
 ## Constraints
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
-- Do NOT create a main.tsx, master.tsx, timeline.tsx, or any "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
+- Do NOT create any "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above`;
 
 // ---------------------------------------------------------------------------

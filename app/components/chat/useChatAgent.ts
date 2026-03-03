@@ -311,9 +311,6 @@ export function useChatAgent() {
 
 						try {
 							const data = JSON.parse(jsonStr);
-							if (data.type?.startsWith("tool")) {
-								console.log(`[sse] ${data.type}`, data.toolCallId, data.toolName || "");
-							}
 
 							if (data.type === "text-delta" && data.delta) {
 								appendText(data.delta);
