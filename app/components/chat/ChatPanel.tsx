@@ -615,7 +615,7 @@ function ModelSelector({ models, current, onSwitch }: {
 					<ChevronDownIcon className="size-3 opacity-50" />
 				</button>
 			</PopoverTrigger>
-			<PopoverContent align="start" side="top" className="w-52 p-1" sideOffset={8}>
+			<PopoverContent align="start" className="w-52 p-1" sideOffset={8}>
 				{models.map((m) => (
 					<button
 						key={`${m.provider}/${m.id}`}
@@ -833,18 +833,20 @@ export function ChatPanel() {
 						onKeyDown={slashMenu.onTextareaKeyDown}
 					/>
 					<PromptInputFooter>
-						<PromptInputButton
-							tooltip="Attach files"
-							onClick={() => {
-								const input = document.querySelector<HTMLInputElement>(
-									'input[type="file"][aria-label="Upload files"]',
-								);
-								input?.click();
-							}}
-						>
-							<PaperclipIcon className="size-3.5" />
-						</PromptInputButton>
-						<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} />
+						<div className="flex items-center gap-0.5">
+							<PromptInputButton
+								tooltip="Attach files"
+								onClick={() => {
+									const input = document.querySelector<HTMLInputElement>(
+										'input[type="file"][aria-label="Upload files"]',
+									);
+									input?.click();
+								}}
+							>
+								<PaperclipIcon className="size-3.5" />
+							</PromptInputButton>
+							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} />
+						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
 								<span>{formatTokens(usage.totalTokens)} tokens</span>
