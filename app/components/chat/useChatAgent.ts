@@ -22,8 +22,9 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
+	const clearDone = useRef(false);
 
-	// Fresh start on mount (refresh = new)
+	// Fresh start on mount (refresh = new) — must complete before first send
 	useEffect(() => {
 		localStorage.removeItem(STORAGE_KEY);
 		fetch("/api/sandbox", {
@@ -31,8 +32,11 @@ export function useChatAgent() {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
 		}).then(() => {
+			clearDone.current = true;
 			window.dispatchEvent(new CustomEvent("studio:refresh"));
-		}).catch(() => {});
+		}).catch(() => {
+			clearDone.current = true;
+		});
 	}, []);
 
 	// Fetch current model on mount
@@ -159,6 +163,14 @@ export function useChatAgent() {
 
 	const send = useCallback(
 		async (text: string, files?: FileUIPart[], displayText?: string) => {
+			// Wait for mount clear to finish
+			if (!clearDone.current) {
+				await new Promise<void>((r) => {
+					const check = () => clearDone.current ? r() : setTimeout(check, 30);
+					check();
+				});
+			}
+
 			// Intercept slash commands
 			if (text.startsWith("/") && !files?.length) {
 				await runCommand(text);
