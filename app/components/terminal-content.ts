@@ -129,10 +129,6 @@ Downloads MP4       ◀── S3 presigned URL
 
 Single scene renders directly. Multiple scenes are composed with \`<Sequence>\` into one continuous video. Each scene is compiled independently — no naming conflicts.
 
-### Filesystem snapshots
-
-Every agent turn, the \`OverlayFs\` state is snapshotted and keyed by session entry ID. Users can rollback to any previous checkpoint — both the conversation history and the filesystem state are restored atomically.
-
 ## Quick Start
 
 \`\`\`bash
