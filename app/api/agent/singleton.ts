@@ -326,6 +326,7 @@ interface Singleton {
 	session: AgentSession;
 	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
+	resetBash: () => void;
 	lastAccess: number;
 }
 
@@ -474,7 +475,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now() };
+	const entry: Singleton = { session, sessionManager, overlayFs, resetBash: () => { bash = null; }, lastAccess: Date.now() };
 	sessions.set(sessionId, entry);
 	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
 	return entry;
@@ -550,11 +551,12 @@ export function getUserFiles(sessionId = "default") {
 export async function clearSingleton(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return;
-	const { session, overlayFs } = s;
+	const { session, overlayFs, resetBash } = s;
 	if (session.isStreaming) {
 		await session.abort();
 	}
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
+	resetBash();
 	await session.newSession();
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }

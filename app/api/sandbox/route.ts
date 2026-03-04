@@ -31,7 +31,8 @@ export async function POST(req: Request) {
 
 		if (action === "clear") {
 			await clearSingleton(sid);
-			return Response.json({ ok: true });
+			const { changes, mountPoint } = getUserFiles(sid);
+			return Response.json({ ok: true, changes, mountPoint });
 		}
 
 		if (action === "delete") {

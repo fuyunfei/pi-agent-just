@@ -37,9 +37,11 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
-		}).then(() => {
+		}).then((r) => r.json()).then((data) => {
 			clearDone = true;
-			window.dispatchEvent(new CustomEvent("studio:refresh"));
+			window.dispatchEvent(new CustomEvent("studio:refresh", {
+				detail: { changes: data.changes, mountPoint: data.mountPoint },
+			}));
 		}).catch(() => {
 			clearDone = true;
 		});
@@ -98,8 +100,10 @@ export function useChatAgent() {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ action: "clear" }),
-				}).then(() => {
-					window.dispatchEvent(new CustomEvent("studio:refresh"));
+				}).then((r) => r.json()).then((data) => {
+					window.dispatchEvent(new CustomEvent("studio:refresh", {
+						detail: { changes: data.changes, mountPoint: data.mountPoint },
+					}));
 				}).catch(() => {});
 				return true;
 			}
@@ -417,8 +421,8 @@ export function useChatAgent() {
 									}));
 								}
 							}
-						} catch {
-							// skip parse errors
+						} catch (parseErr) {
+							console.warn("[sse] parse error:", parseErr, "raw:", jsonStr.slice(0, 200));
 						}
 					}
 				}
@@ -472,9 +476,10 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
-		}).then(() => {
-			// Tell code-studio to refetch changes
-			window.dispatchEvent(new CustomEvent("studio:refresh"));
+		}).then((r) => r.json()).then((data) => {
+			window.dispatchEvent(new CustomEvent("studio:refresh", {
+				detail: { changes: data.changes, mountPoint: data.mountPoint },
+			}));
 		}).catch(() => {
 			// Server reset failed — UI is already cleared, will resync on next poll
 		});

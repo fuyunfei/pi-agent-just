@@ -60,7 +60,15 @@ export async function POST(req: Request) {
 			// Track tool call args for logging (toolcall_end has args, tool_execution_end does not)
 			const toolArgs = new Map<string, Record<string, unknown>>();
 
-			const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
+			let unsubscribe: () => void;
+
+			// Clean up subscription if client disconnects
+			req.signal?.addEventListener("abort", () => {
+				unsubscribe?.();
+				try { controller.close(); } catch { /* already closed */ }
+			});
+
+			unsubscribe = session.subscribe((event: AgentSessionEvent) => {
 				// Text streaming
 				if (
 					event.type === "message_update" &&
