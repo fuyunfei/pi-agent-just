@@ -28,10 +28,11 @@ const EXT_TO_MIME: Record<string, string> = {
 async function inlineImages(code: string, overlayFs: OverlayFs): Promise<string> {
 	const mountPoint = overlayFs.getMountPoint();
 	const matches: { full: string; relativePath: string }[] = [];
-	code.replace(/\/(img\/.+?\.(png|jpe?g|webp|gif))/g, (full, relativePath) => {
+	code.replace(/\/?(img\/.+?\.(png|jpe?g|webp|gif))/g, (full, relativePath) => {
 		matches.push({ full, relativePath });
 		return full;
 	});
+	console.log(`[render] inlineImages: found ${matches.length} image refs:`, matches.map(m => m.full));
 	if (matches.length === 0) return code;
 
 	let result = code;
@@ -43,8 +44,9 @@ async function inlineImages(code: string, overlayFs: OverlayFs): Promise<string>
 			const mime = EXT_TO_MIME[ext] || "image/png";
 			const b64 = Buffer.from(data).toString("base64");
 			result = result.replaceAll(m.full, `data:${mime};base64,${b64}`);
-		} catch {
-			// keep original URL
+			console.log(`[render] inlined ${m.relativePath} (${(data.length / 1024).toFixed(0)}KB)`);
+		} catch (err) {
+			console.warn(`[render] failed to inline ${m.relativePath} from ${filePath}:`, err);
 		}
 	}
 	return result;
@@ -72,7 +74,15 @@ export async function POST(req: Request) {
 
 		// Get OverlayFs for this session to inline image URLs as data URIs
 		const sessionId = getSessionId(req);
+		console.log(`[render] session=${sessionId.slice(0, 8)}`);
 		const { overlayFs } = getOrCreateSingleton(sessionId);
+		const mp = overlayFs.getMountPoint();
+		try {
+			const imgFiles = await overlayFs.readdir(`${mp}/img`);
+			console.log(`[render] img dir contents:`, imgFiles);
+		} catch {
+			console.log(`[render] img dir not found or empty`);
+		}
 
 		// Inline /img/ URLs as data URIs before sending to Lambda
 		if (hasScenes) {
