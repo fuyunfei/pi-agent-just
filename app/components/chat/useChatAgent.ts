@@ -23,9 +23,9 @@ let clearDone = false;
 
 export function useChatAgent() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
-	const [status, setStatus] = useState<"ready" | "streaming" | "error">("ready");
+	const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
 	const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
-	const [thinking, setThinking] = useState<ThinkingState>({ level: "off", available: [], supported: false });
+	const [thinking, setThinking] = useState<ThinkingState>({ level: "medium", available: [], supported: false });
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
@@ -194,7 +194,7 @@ export function useChatAgent() {
 			};
 
 			setMessages((prev) => [...prev, userMsg, assistantMsg]);
-			setStatus("streaming");
+			setStatus("submitted");
 
 			// Track for API
 			historyRef.current.push({
@@ -243,6 +243,10 @@ export function useChatAgent() {
 			const partsTracker: MessagePart[] = [];
 			const toolNameById = new Map<string, string>();
 			let fullText = "";
+			let streamStarted = false;
+			const markStreaming = () => {
+				if (!streamStarted) { streamStarted = true; setStatus("streaming"); }
+			};
 
 			/** Append text delta — merge into last text part or create new one */
 			const appendText = (delta: string) => {
@@ -330,6 +334,7 @@ export function useChatAgent() {
 
 						try {
 							const data = JSON.parse(jsonStr);
+							markStreaming();
 
 							if (data.type === "text-delta" && data.delta) {
 								appendText(data.delta);

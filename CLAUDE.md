@@ -18,7 +18,6 @@ pnpm build            # Production build
 app/api/agent/singleton.ts    ← The heart: OverlayFs + Bash + AgentSession singleton
 app/api/agent/route.ts        ← SSE streaming endpoint
 app/api/agent/command/        ← Slash command API (/compact, /session)
-app/api/checkpoint/           ← Conversation + FS snapshot rollback
 app/api/model/                ← Model switching
 app/api/sandbox/              ← File change list + session reset
 app/components/chat/          ← Chat UI, slash commands, SSE parsing
@@ -51,10 +50,6 @@ grep                     createOverlayGrepOps  readFile + isDirectory
 ### SSE streaming
 
 `route.ts` streams agent events as `data: {json}\n\n`. The frontend `useChatAgent.ts` hook parses them. Key events: `text-delta`, `tool-call-started`, `tool-input-available`, `tool-output-available`, `finish` (with usage).
-
-### Filesystem snapshots
-
-Each agent turn, `OverlayFs.snapshot()` is stored keyed by entry ID. Rollback restores both conversation tree and FS state atomically.
 
 ## Environment
 

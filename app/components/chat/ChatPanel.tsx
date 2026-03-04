@@ -698,7 +698,7 @@ export function ChatPanel() {
 
 	const handleSubmit = useCallback(
 		({ text, files }: { text: string; files?: FileUIPart[] }) => {
-			if (!text.trim() || status === "streaming") return;
+			if (!text.trim() || status === "submitted" || status === "streaming") return;
 			slashMenu.setQuery("");
 			send(text.trim(), files?.length ? files : undefined);
 		},
@@ -706,11 +706,13 @@ export function ChatPanel() {
 	);
 
 	const chatStatus =
-		status === "streaming"
-			? "streaming"
-			: status === "error"
-				? "error"
-				: "ready";
+		status === "submitted"
+			? "submitted"
+			: status === "streaming"
+				? "streaming"
+				: status === "error"
+					? "error"
+					: "ready";
 
 	// Pick 4 random suggestions (stable per mount)
 	const visibleSuggestions = useMemo(() => {

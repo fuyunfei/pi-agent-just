@@ -394,7 +394,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		initialState: {
 			systemPrompt: "",
 			model,
-			thinkingLevel: "off",
+			thinkingLevel: "medium",
 			tools: [],
 		},
 		sessionId: `web-${Date.now()}`,
@@ -408,7 +408,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 	});
 
 	sessionManager.appendModelChange(model.provider, model.id);
-	sessionManager.appendThinkingLevelChange("off");
+	sessionManager.appendThinkingLevelChange("medium");
 
 	const resourceLoader = {
 		getExtensions: () => ({
