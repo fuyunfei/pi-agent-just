@@ -3,8 +3,8 @@
  * Uses a temporary empty directory as the overlay root (pure in-memory sandbox).
  */
 
-import { Bash, OverlayFs, type FsSnapshot } from "just-bash";
-import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { Bash, OverlayFs } from "just-bash";
+import { mkdtempSync } from "fs";
 import { join, relative } from "path";
 import { tmpdir } from "os";
 import { minimatch } from "minimatch";
@@ -36,49 +36,6 @@ import { getModel } from "@mariozechner/pi-ai";
 // Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
-// ---------------------------------------------------------------------------
-// Persist / restore OverlayFs snapshot to /tmp so files survive cold starts
-// ---------------------------------------------------------------------------
-function snapshotPath(sessionId: string) {
-	return join(tmpdir(), `pi-sandbox-snapshot-${sessionId.slice(0, 8)}.json`);
-}
-
-interface SerializedEntry {
-	type: "file" | "directory";
-	content?: string; // base64 for files
-	mode: number;
-	mtime: string;
-}
-
-function persistSnapshot(snap: FsSnapshot, sessionId: string) {
-	try {
-		const memory: Record<string, SerializedEntry> = {};
-		for (const [path, entry] of snap.memory) {
-			if (entry.type === "symlink") continue; // symlinks disabled in sandbox
-			const se: SerializedEntry = { type: entry.type, mode: entry.mode, mtime: entry.mtime.toISOString() };
-			if (entry.type === "file") se.content = Buffer.from(entry.content).toString("base64");
-			memory[path] = se;
-		}
-		writeFileSync(snapshotPath(sessionId), JSON.stringify({ memory, deleted: [...snap.deleted] }));
-	} catch { /* ignore write errors */ }
-}
-
-function loadPersistedSnapshot(sessionId: string): FsSnapshot | null {
-	try {
-		const raw = JSON.parse(readFileSync(snapshotPath(sessionId), "utf-8"));
-		const memory = new Map<string, import("just-bash").MemoryEntry>();
-		for (const [path, se] of Object.entries(raw.memory) as [string, SerializedEntry][]) {
-			if (se.type === "file") {
-				memory.set(path, { type: "file", content: Buffer.from(se.content!, "base64"), mode: se.mode, mtime: new Date(se.mtime) });
-			} else {
-				memory.set(path, { type: "directory", mode: se.mode, mtime: new Date(se.mtime) });
-			}
-		}
-		return { memory, deleted: new Set(raw.deleted || []) };
-	} catch {
-		return null;
-	}
-}
 
 const SYSTEM_PROMPT = `You are an expert motion graphics engineer using remotion. 
 You help users create and edit motion graphics clips as .tsx files.
@@ -245,11 +202,11 @@ Key patterns:
 // just-bash → pi-coding-agent adapters
 // ---------------------------------------------------------------------------
 
-function createJustBashOps(bashInstance: Bash): BashOperations {
+function createLazyBashOps(getBash: () => Bash): BashOperations {
 	return {
 		async exec(command, cwd, { onData, signal, timeout }) {
-			const execPromise = bashInstance.exec(command, { cwd });
-			let result: Awaited<ReturnType<typeof bashInstance.exec>>;
+			const execPromise = getBash().exec(command, { cwd });
+			let result: Awaited<ReturnType<Bash["exec"]>>;
 			if (timeout && timeout > 0) {
 				const timeoutMs = timeout * 1000;
 				result = (await Promise.race([
@@ -369,7 +326,6 @@ interface Singleton {
 	session: AgentSession;
 	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
-	fsCheckpoints: Map<string, FsSnapshot>;
 	lastAccess: number;
 }
 
@@ -413,18 +369,18 @@ export function getOrCreateSingleton(sessionId = "default") {
 
 	evictSessions();
 
-	// --- Sandbox setup (writes allowed, stay in memory) ---
+	// OverlayFs serves as an in-memory filesystem — the "overlay" layer is unused
+	// since we mount on an empty tmpdir. We keep it because it implements the full
+	// FS API (readFile, writeFile, readdir, stat, etc.) needed by tool adapters.
 	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
-
-	// Restore files from /tmp if this is a cold start
-	const persisted = loadPersistedSnapshot(sessionId);
-	if (persisted) {
-		overlayFs.restore(persisted);
-		console.log(`[agent] restored ${persisted.memory.size} files from /tmp`);
-	}
-
 	const mountPoint = overlayFs.getMountPoint();
-	const bash = new Bash({ fs: overlayFs, cwd: mountPoint });
+
+	// Lazy-init Bash — only create (and populate 179 system files) when first used
+	let bash: Bash | null = null;
+	const getBash = () => {
+		if (!bash) bash = new Bash({ fs: overlayFs, cwd: mountPoint });
+		return bash;
+	};
 
 	// --- Pi-coding-agent setup ---
 	const provider = process.env.OPENROUTER_API_KEY
@@ -448,7 +404,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const sandboxedTools: Record<string, any> = {
-		bash: createBashTool(mountPoint, { operations: createJustBashOps(bash) }),
+		bash: createBashTool(mountPoint, { operations: createLazyBashOps(getBash) }),
 		read: createReadTool(mountPoint, {
 			operations: createOverlayReadOps(overlayFs),
 		}),
@@ -518,11 +474,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const fsCheckpoints = new Map<string, FsSnapshot>();
-	// Store initial checkpoint before any turns
-	fsCheckpoints.set("initial", overlayFs.snapshot());
-
-	const entry: Singleton = { session, sessionManager, overlayFs, fsCheckpoints, lastAccess: Date.now() };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now() };
 	sessions.set(sessionId, entry);
 	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
 	return entry;
@@ -583,13 +535,6 @@ export async function compactSession(sessionId = "default") {
 	};
 }
 
-/** Persist current OverlayFs state to /tmp for cold-start recovery. */
-export function persistCurrentSnapshot(sessionId = "default") {
-	const s = sessions.get(sessionId);
-	if (!s) return;
-	persistSnapshot(s.overlayFs.snapshot(), sessionId);
-}
-
 /** Return user project files (only files under mountPoint, not system dirs). */
 export function getUserFiles(sessionId = "default") {
 	const s = sessions.get(sessionId);
@@ -605,14 +550,11 @@ export function getUserFiles(sessionId = "default") {
 export async function clearSingleton(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return;
-	const { session, overlayFs, fsCheckpoints } = s;
+	const { session, overlayFs } = s;
 	if (session.isStreaming) {
 		await session.abort();
 	}
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
 	await session.newSession();
-	fsCheckpoints.clear();
-	fsCheckpoints.set("initial", overlayFs.snapshot());
-	try { unlinkSync(snapshotPath(sessionId)); } catch { /* ignore if missing */ }
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }

@@ -45,7 +45,6 @@ import {
 	FilmIcon,
 	GraduationCapIcon,
 	HeartIcon,
-	HistoryIcon,
 	Loader2Icon,
 	MusicIcon,
 	PaperclipIcon,
@@ -332,56 +331,6 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 });
 
 /* ------------------------------------------------------------------ */
-/*  Checkpoint indicator between user messages                         */
-/* ------------------------------------------------------------------ */
-
-const CheckpointIndicator = memo(function CheckpointIndicator({
-	index,
-	onRollback,
-}: {
-	index: number;
-	onRollback: () => void;
-}) {
-	const [confirming, setConfirming] = useState(false);
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	const handleClick = useCallback(() => {
-		if (confirming) {
-			if (timerRef.current) clearTimeout(timerRef.current);
-			setConfirming(false);
-			onRollback();
-		} else {
-			setConfirming(true);
-			timerRef.current = setTimeout(() => setConfirming(false), 3000);
-		}
-	}, [confirming, onRollback]);
-
-	useEffect(() => () => {
-		if (timerRef.current) clearTimeout(timerRef.current);
-	}, []);
-
-	return (
-		<div className="group flex items-center gap-2 px-10 py-0.5">
-			<div className="h-px flex-1 bg-border/40" />
-			<button
-				type="button"
-				onClick={handleClick}
-				className={cn(
-					"flex items-center gap-1 rounded-full px-2 py-0.5",
-					"text-[10px] transition-all",
-					confirming
-						? "bg-destructive/10 text-destructive opacity-100"
-						: "text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground opacity-0 group-hover:opacity-100",
-				)}
-			>
-				<HistoryIcon className="size-2.5" />
-				<span>{confirming ? "Revert?" : `v${index + 1}`}</span>
-			</button>
-			<div className="h-px flex-1 bg-border/40" />
-		</div>
-	);
-});
-
 /* ------------------------------------------------------------------ */
 /*  Assistant message                                                  */
 /* ------------------------------------------------------------------ */
@@ -628,7 +577,7 @@ function ModelSelector({ models, current, onSwitch }: {
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, rollback, currentModel, switchModel, usage } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, usage } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -695,20 +644,6 @@ export function ChatPanel() {
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// Build checkpoint index: track which user messages have entryIds
-	const checkpointUserIndices = useMemo(() => {
-		const indices: Array<{ msgIndex: number; entryId: string; cpIndex: number }> = [];
-		let cpIdx = 0;
-		for (let i = 0; i < messages.length; i++) {
-			const m = messages[i];
-			if (m.role === "user" && m.entryId) {
-				indices.push({ msgIndex: i, entryId: m.entryId, cpIndex: cpIdx });
-				cpIdx++;
-			}
-		}
-		return indices;
-	}, [messages]);
-
 	return (
 		<div className="flex flex-col h-full bg-background">
 			<Conversation className="flex-1 relative chat-scroll">
@@ -744,21 +679,9 @@ export function ChatPanel() {
 						</div>
 					)}
 
-					{/* Messages with checkpoint indicators */}
-					{messages.map((msg, i) => {
-						// Check if a checkpoint indicator should appear before this message
-						const cp = checkpointUserIndices.find((c) => c.msgIndex === i);
-						const showCheckpoint = msg.role === "user" && cp && i > 0;
-
-						return (
-							<div key={msg.id}>
-								{showCheckpoint && (
-									<CheckpointIndicator
-										index={cp.cpIndex}
-										onRollback={() => rollback(cp.entryId)}
-									/>
-								)}
-								{msg.role === "system" ? (
+					{messages.map((msg) => (
+						<div key={msg.id}>
+							{msg.role === "system" ? (
 									<div className="flex justify-center px-10">
 										<pre className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-4 py-2 font-mono whitespace-pre-wrap max-w-full">
 											{msg.content}
@@ -772,8 +695,7 @@ export function ChatPanel() {
 									<AssistantMessage msg={msg} />
 								)}
 							</div>
-						);
-					})}
+					))}
 				</ConversationContent>
 				<ConversationScrollButton />
 				{/* Floating new session button — top left */}

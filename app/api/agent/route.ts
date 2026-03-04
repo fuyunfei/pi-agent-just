@@ -3,7 +3,7 @@
  */
 
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { getOrCreateSingleton, getSessionId, getSessionStats, getUserFiles, persistCurrentSnapshot } from "./singleton";
+import { getOrCreateSingleton, getSessionId, getSessionStats, getUserFiles } from "./singleton";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 		);
 	}
 
-	const { session, sessionManager, overlayFs, fsCheckpoints } = ctx;
+	const { session, sessionManager } = ctx;
 
 	// --- Stream SSE ---
 	const encoder = new TextEncoder();
@@ -139,20 +139,11 @@ export async function POST(req: Request) {
 
 				// Agent finished
 				if (event.type === "agent_end") {
-					// Save FS checkpoint keyed by current leaf entry
-					const leafId = sessionManager.getLeafId();
-					if (leafId) {
-						fsCheckpoints.set(leafId, overlayFs.snapshot());
-					}
-					// Persist to /tmp so files survive cold starts
-					persistCurrentSnapshot(sid);
 					const usage = getSessionStats(sid);
-
-					// Push file state so client doesn't need to poll GET /api/sandbox
 					const { changes, mountPoint } = getUserFiles(sid);
 
-					console.log(`[route] done entry=${leafId ?? "?"} tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
-					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage, changes, mountPoint });
+					console.log(`[route] done tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
+					enqueue({ type: "finish", reason: "stop", usage, changes, mountPoint });
 					try {
 						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 						controller.close();
