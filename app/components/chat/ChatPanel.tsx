@@ -136,10 +136,10 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	const args = tool.args;
 	const hasArgs = Object.keys(args).length > 0;
 
-	// Early card — no args yet, show generic label
+	// Early card — no args yet, show generic label (no icon — stateIcon already shows spinner)
 	if (!hasArgs) {
 		return {
-			icon: <Loader2Icon className="size-3.5 animate-spin" />,
+			icon: null,
 			label: TOOL_LABELS[name] || name,
 		};
 	}
