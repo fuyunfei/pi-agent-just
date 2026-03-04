@@ -86,9 +86,16 @@ export function getFileIcon(path: string): LucideIcon {
 	return EXTENSION_TO_ICON[getExtension(path)] || File;
 }
 
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+
+export function isImageFile(path: string): boolean {
+	return IMAGE_EXTENSIONS.has(getExtension(path));
+}
+
 export function isPreviewable(path: string): boolean {
 	const ext = getExtension(path);
 	return (
+		IMAGE_EXTENSIONS.has(ext) ||
 		ext === "html" ||
 		ext === "htm" ||
 		ext === "md" ||
@@ -106,6 +113,7 @@ export function isPreviewable(path: string): boolean {
 export function shouldDefaultPreview(path: string): boolean {
 	const ext = getExtension(path);
 	return (
+		IMAGE_EXTENSIONS.has(ext) ||
 		ext === "html" ||
 		ext === "htm" ||
 		ext === "svg" ||

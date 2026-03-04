@@ -793,6 +793,17 @@ export function LivePreview({
 	}
 
 	switch (ext) {
+		case "png":
+		case "jpg":
+		case "jpeg":
+		case "gif":
+		case "webp":
+			return (
+				<div style={{ ...fill, display: "flex", alignItems: "center", justifyContent: "center", padding: 32, overflow: "auto" }} className="studio-surface">
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={`/img/${filename}`} alt={filename} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+				</div>
+			);
 		case "html":
 		case "htm":
 			return <HtmlPreview content={content} />;
