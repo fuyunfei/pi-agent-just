@@ -501,16 +501,13 @@ export function useChatAgent() {
 	}, []);
 
 	const switchThinkingLevel = useCallback(async (level: string) => {
+		setThinking((prev) => ({ ...prev, level }));
 		try {
-			const res = await fetch("/api/model", {
+			await fetch("/api/model", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ thinkingLevel: level }),
 			});
-			const data = await res.json();
-			if (data.thinking) {
-				setThinking(data.thinking);
-			}
 		} catch {
 			// Thinking switch failed
 		}
