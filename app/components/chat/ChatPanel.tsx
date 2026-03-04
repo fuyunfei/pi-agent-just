@@ -313,35 +313,44 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 		);
 	}
 
-	// Image generation card — show thumbnail when completed
+	// Image generation card — matches scene card layout
 	if (tool.toolName === "generate_image") {
 		const imageUrl = tool.details?.imageUrl as string | undefined;
 		return (
 			<div className="my-1.5">
 				<div className={cn(
-					"rounded-xl border overflow-hidden",
+					"rounded-xl border overflow-hidden transition-colors",
 					isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
 				)}>
-					<div className="flex items-center gap-2 px-3 py-2 text-xs">
-						{isRunning ? (
-							<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-						) : isError ? (
-							<XCircleIcon className="size-3.5 text-red-500" />
-						) : (
-							<CheckCircle2Icon className="size-3.5 text-emerald-500" />
-						)}
-						<ImageIcon className="size-3.5 text-muted-foreground" />
-						<span className="min-w-0 flex-1 truncate text-foreground/80">
-							{display.label}
-						</span>
+					<div className="flex items-center gap-2.5 px-3 py-2.5 text-xs">
+						<div className={cn(
+							"flex size-7 items-center justify-center rounded-lg flex-shrink-0",
+							isRunning ? "bg-muted text-muted-foreground" : isError ? "bg-red-500/10 text-red-500" : "bg-foreground/5 text-foreground/70",
+						)}>
+							{isRunning ? (
+								<Loader2Icon className="size-3.5 animate-spin" />
+							) : isError ? (
+								<XCircleIcon className="size-3.5" />
+							) : (
+								<ImageIcon className="size-3.5" />
+							)}
+						</div>
+						<div className="flex-1 min-w-0">
+							<div className={cn("font-medium truncate", isError ? "text-red-500/90" : "text-foreground/90")}>
+								{display.label}
+							</div>
+							<div className="text-[10px] text-muted-foreground/60 mt-0.5">
+								{isRunning ? "Generating image..." : isError ? "Failed" : "Image generated"}
+							</div>
+						</div>
 					</div>
 					{imageUrl && !isRunning && !isError && (
-						<div className="px-2 pb-2">
+						<div className="px-2.5 pb-2.5">
 							{/* eslint-disable-next-line @next/next/no-img-element */}
 							<img
 								src={imageUrl}
 								alt={String(tool.args.prompt || "")}
-								className="rounded-lg w-full max-h-48 object-cover"
+								className="rounded-lg w-full max-h-52 object-contain bg-black/5 dark:bg-white/5"
 							/>
 						</div>
 					)}
