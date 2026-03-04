@@ -248,7 +248,7 @@ const ImageToolCard = memo(function ImageToolCard({
 				isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
 			)}>
 				{hasImage ? (
-					<div className="relative aspect-square">
+					<div className="relative aspect-[4/3]">
 						{/* eslint-disable-next-line @next/next/no-img-element */}
 						<img
 							src={imageUrl}
@@ -256,13 +256,13 @@ const ImageToolCard = memo(function ImageToolCard({
 							className="w-full h-full object-cover"
 						/>
 						<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
-							<span className="text-[10px] text-white/80 line-clamp-2 leading-tight">
+							<span className="text-[10px] text-white/80 line-clamp-1 leading-tight">
 								{String(tool.args.prompt || "")}
 							</span>
 						</div>
 					</div>
 				) : (
-					<div className="aspect-square flex items-center justify-center">
+					<div className="aspect-[4/3] flex items-center justify-center">
 						{isRunning ? (
 							<Loader2Icon className="size-4 animate-spin text-muted-foreground" />
 						) : isError ? (
@@ -311,7 +311,7 @@ const ImageToolCard = memo(function ImageToolCard({
 						<img
 							src={imageUrl}
 							alt={String(tool.args.prompt || "")}
-							className="rounded-lg w-full max-h-52 object-contain bg-black/5 dark:bg-white/5"
+							className="rounded-lg w-full max-h-36 object-contain bg-black/5 dark:bg-white/5"
 						/>
 					</div>
 				)}
