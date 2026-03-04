@@ -222,6 +222,104 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	};
 }
 
+/* ------------------------------------------------------------------ */
+/*  Image tool card                                                    */
+/* ------------------------------------------------------------------ */
+
+const ImageToolCard = memo(function ImageToolCard({
+	tool,
+	display,
+	compact,
+}: {
+	tool: ToolCall;
+	display: ToolDisplay;
+	compact: boolean;
+}) {
+	const isRunning = tool.state === "running";
+	const isError = tool.state === "error";
+	const imageUrl = tool.details?.imageUrl as string | undefined;
+	const hasImage = imageUrl && !isRunning && !isError;
+
+	if (compact) {
+		// Grid cell — thumbnail with overlay label
+		return (
+			<div className={cn(
+				"rounded-lg border overflow-hidden transition-colors",
+				isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
+			)}>
+				{hasImage ? (
+					<div className="relative aspect-square">
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img
+							src={imageUrl}
+							alt={String(tool.args.prompt || "")}
+							className="w-full h-full object-cover"
+						/>
+						<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
+							<span className="text-[10px] text-white/80 line-clamp-2 leading-tight">
+								{String(tool.args.prompt || "")}
+							</span>
+						</div>
+					</div>
+				) : (
+					<div className="aspect-square flex items-center justify-center">
+						{isRunning ? (
+							<Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+						) : isError ? (
+							<XCircleIcon className="size-4 text-red-500" />
+						) : (
+							<ImageIcon className="size-4 text-muted-foreground" />
+						)}
+					</div>
+				)}
+			</div>
+		);
+	}
+
+	// Standalone — full card with header
+	return (
+		<div className="my-1.5">
+			<div className={cn(
+				"rounded-xl border overflow-hidden transition-colors",
+				isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
+			)}>
+				<div className="flex items-center gap-2.5 px-3 py-2.5 text-xs">
+					<div className={cn(
+						"flex size-7 items-center justify-center rounded-lg flex-shrink-0",
+						isRunning ? "bg-muted text-muted-foreground" : isError ? "bg-red-500/10 text-red-500" : "bg-foreground/5 text-foreground/70",
+					)}>
+						{isRunning ? (
+							<Loader2Icon className="size-3.5 animate-spin" />
+						) : isError ? (
+							<XCircleIcon className="size-3.5" />
+						) : (
+							<ImageIcon className="size-3.5" />
+						)}
+					</div>
+					<div className="flex-1 min-w-0">
+						<div className={cn("font-medium truncate", isError ? "text-red-500/90" : "text-foreground/90")}>
+							{display.label}
+						</div>
+						<div className="text-[10px] text-muted-foreground/60 mt-0.5">
+							{isRunning ? "Generating image..." : isError ? "Failed" : "Image generated"}
+						</div>
+					</div>
+				</div>
+				{hasImage && (
+					<div className="px-2.5 pb-2.5">
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img
+							src={imageUrl}
+							alt={String(tool.args.prompt || "")}
+							className="rounded-lg w-full max-h-52 object-contain bg-black/5 dark:bg-white/5"
+						/>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+});
+
 /** Extract filename from tool args */
 function toolFilename(tool: ToolCall): string | null {
 	const path = String(tool.args.path || tool.args.file_path || "");
@@ -313,50 +411,9 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 		);
 	}
 
-	// Image generation card — matches scene card layout
+	// Image generation card — rendered by ImageToolCard below
 	if (tool.toolName === "generate_image") {
-		const imageUrl = tool.details?.imageUrl as string | undefined;
-		return (
-			<div className="my-1.5">
-				<div className={cn(
-					"rounded-xl border overflow-hidden transition-colors",
-					isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
-				)}>
-					<div className="flex items-center gap-2.5 px-3 py-2.5 text-xs">
-						<div className={cn(
-							"flex size-7 items-center justify-center rounded-lg flex-shrink-0",
-							isRunning ? "bg-muted text-muted-foreground" : isError ? "bg-red-500/10 text-red-500" : "bg-foreground/5 text-foreground/70",
-						)}>
-							{isRunning ? (
-								<Loader2Icon className="size-3.5 animate-spin" />
-							) : isError ? (
-								<XCircleIcon className="size-3.5" />
-							) : (
-								<ImageIcon className="size-3.5" />
-							)}
-						</div>
-						<div className="flex-1 min-w-0">
-							<div className={cn("font-medium truncate", isError ? "text-red-500/90" : "text-foreground/90")}>
-								{display.label}
-							</div>
-							<div className="text-[10px] text-muted-foreground/60 mt-0.5">
-								{isRunning ? "Generating image..." : isError ? "Failed" : "Image generated"}
-							</div>
-						</div>
-					</div>
-					{imageUrl && !isRunning && !isError && (
-						<div className="px-2.5 pb-2.5">
-							{/* eslint-disable-next-line @next/next/no-img-element */}
-							<img
-								src={imageUrl}
-								alt={String(tool.args.prompt || "")}
-								className="rounded-lg w-full max-h-52 object-contain bg-black/5 dark:bg-white/5"
-							/>
-						</div>
-					)}
-				</div>
-			</div>
-		);
+		return <ImageToolCard tool={tool} display={display} compact={false} />;
 	}
 
 	// Default tool card — click opens file if applicable
@@ -433,18 +490,52 @@ const AssistantMessage = memo(function AssistantMessage({
 					</div>
 				)}
 
-				{/* Parts — interleaved text + tools */}
-				{msg.parts?.map((part, i) =>
-					part.type === "tool" ? (
-						<ToolCallCard key={part.tool.id} tool={part.tool} />
-					) : part.text ? (
-						<Message key={`text-${i}`} from="assistant">
-							<MessageContent>
-								<MessageResponse>{part.text}</MessageResponse>
-							</MessageContent>
-						</Message>
-					) : null,
-				)}
+				{/* Parts — interleaved text + tools, with image grouping */}
+				{(() => {
+					if (!msg.parts) return null;
+					const elements: React.ReactNode[] = [];
+					let i = 0;
+					while (i < msg.parts.length) {
+						const part = msg.parts[i];
+						if (part.type === "tool" && part.tool.toolName === "generate_image") {
+							// Collect consecutive image tools
+							const group: ToolCall[] = [];
+							while (i < msg.parts.length) {
+								const p = msg.parts[i];
+								if (p.type === "tool" && p.tool.toolName === "generate_image") {
+									group.push(p.tool);
+									i++;
+								} else break;
+							}
+							if (group.length === 1) {
+								elements.push(<ToolCallCard key={group[0].id} tool={group[0]} />);
+							} else {
+								elements.push(
+									<div key={`img-group-${group[0].id}`} className="my-1.5 grid grid-cols-2 gap-2">
+										{group.map((t) => (
+											<ImageToolCard key={t.id} tool={t} display={toolDisplayInfo(t)} compact />
+										))}
+									</div>,
+								);
+							}
+						} else if (part.type === "tool") {
+							elements.push(<ToolCallCard key={part.tool.id} tool={part.tool} />);
+							i++;
+						} else if (part.text) {
+							elements.push(
+								<Message key={`text-${i}`} from="assistant">
+									<MessageContent>
+										<MessageResponse>{part.text}</MessageResponse>
+									</MessageContent>
+								</Message>,
+							);
+							i++;
+						} else {
+							i++;
+						}
+					}
+					return elements;
+				})()}
 
 				{/* Fallback for messages without parts */}
 				{!msg.parts?.length && msg.content && (
