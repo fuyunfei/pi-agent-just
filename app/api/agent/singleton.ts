@@ -28,8 +28,10 @@ import {
 	type FindOperations,
 	type GrepOperations,
 } from "@mariozechner/pi-coding-agent";
-import { Agent } from "@mariozechner/pi-agent-core";
+import { Agent, type AgentToolResult } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
+import { Type } from "@sinclair/typebox";
+import { randomUUID } from "crypto";
 
 // Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
@@ -145,6 +147,16 @@ interface Singleton {
 const sessions: Map<string, Singleton> =
 	(globalThis as Record<string, unknown>).__piSessions as Map<string, Singleton>
 	?? ((globalThis as Record<string, unknown>).__piSessions = new Map<string, Singleton>());
+
+// In-memory image store — keyed by unique ID, persists across HMR
+interface StoredImage { data: Buffer; mime: string }
+const imageStore: Map<string, StoredImage> =
+	(globalThis as Record<string, unknown>).__piImages as Map<string, StoredImage>
+	?? ((globalThis as Record<string, unknown>).__piImages = new Map<string, StoredImage>());
+
+export function getStoredImage(id: string): StoredImage | undefined {
+	return imageStore.get(id);
+}
 const MAX_SESSIONS = 10;
 const SESSION_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -168,6 +180,61 @@ function evictSessions() {
 			sessions.delete(oldestId);
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Image generation tool
+// ---------------------------------------------------------------------------
+
+const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+
+function createImageGenTool(apiKey: string) {
+	return {
+		name: "generate_image",
+		label: "Generate Image",
+		description: "Generate an image from a text prompt. Returns a URL you can use with <Img src={url}>.",
+		parameters: Type.Object({
+			prompt: Type.String({ description: "Describe the image to generate" }),
+		}),
+		async execute(
+			_toolCallId: string,
+			params: { prompt: string },
+		): Promise<AgentToolResult<unknown>> {
+			const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+				method: "POST",
+				headers: {
+					"Authorization": `Bearer ${apiKey}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					model: IMAGE_MODEL,
+					messages: [{ role: "user", content: params.prompt }],
+					modalities: ["image"],
+				}),
+			});
+			if (!res.ok) {
+				const err = await res.text();
+				return { content: [{ type: "text", text: `Image generation failed: ${err}` }], details: {} };
+			}
+			const data = await res.json();
+			const imgUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url as string | undefined;
+			if (!imgUrl?.startsWith("data:image/")) {
+				return { content: [{ type: "text", text: "No image in response" }], details: {} };
+			}
+			// Parse data URI and store
+			const [header, b64] = imgUrl.split(",");
+			const mime = header.match(/data:([^;]+)/)?.[1] || "image/png";
+			const buf = Buffer.from(b64, "base64");
+			const id = randomUUID().slice(0, 12);
+			imageStore.set(id, { data: buf, mime });
+			const url = `/api/img/${id}`;
+			console.log(`[image] generated id=${id} size=${(buf.length / 1024).toFixed(0)}KB`);
+			return {
+				content: [{ type: "text", text: `Image generated: ${url}` }],
+				details: {},
+			};
+		},
+	};
 }
 
 export function getOrCreateSingleton(sessionId = "default") {
@@ -227,6 +294,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		grep: createGrepTool(mountPoint, {
 			operations: createOverlayGrepOps(overlayFs),
 		}),
+		generate_image: createImageGenTool(apiKey),
 	};
 
 	const agent = new Agent({

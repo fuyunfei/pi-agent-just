@@ -38,6 +38,7 @@ edit                     createOverlayEditOps  readFile + writeFile
 ls                       createOverlayLsOps    readdir + stat + exists
 find                     createOverlayFindOps  recursive walk + minimatch
 grep                     createOverlayGrepOps  readFile + isDirectory
+generate_image           createImageGenTool    OpenRouter API → in-memory store
 ```
 
 ### Adding a tool

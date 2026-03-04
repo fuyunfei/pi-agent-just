@@ -42,6 +42,7 @@ import {
 	FileEditIcon,
 	FileIcon,
 	ExternalLinkIcon,
+	ImageIcon,
 	FilmIcon,
 	GraduationCapIcon,
 	HeartIcon,
@@ -129,6 +130,7 @@ const TOOL_LABELS: Record<string, string> = {
 	grep: "Searching…",
 	find: "Finding…",
 	ls: "Listing…",
+	generate_image: "Generating image…",
 };
 
 function toolDisplayInfo(tool: ToolCall): ToolDisplay {
@@ -197,6 +199,15 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		return {
 			icon: <FileIcon className="size-3.5" />,
 			label: short || "Reading…",
+		};
+	}
+
+	if (name === "generate_image") {
+		const prompt = String(args.prompt || "");
+		const short = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
+		return {
+			icon: <ImageIcon className="size-3.5" />,
+			label: short || "Generating image…",
 		};
 	}
 
