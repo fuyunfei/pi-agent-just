@@ -239,82 +239,62 @@ const ImageToolCard = memo(function ImageToolCard({
 	const isError = tool.state === "error";
 	const imageUrl = tool.details?.imageUrl as string | undefined;
 	const hasImage = imageUrl && !isRunning && !isError;
+	const prompt = String(tool.args.prompt || "");
+
+	// Shimmer skeleton for loading state
+	const skeleton = (className: string) => (
+		<div className={cn("relative overflow-hidden bg-muted/40 border border-border/40 rounded-lg", className)}>
+			<div className="absolute inset-0 bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent animate-[shimmer_2s_infinite]" />
+			<div className="flex flex-col items-center justify-center gap-2 h-full">
+				<ImageIcon className="size-4 text-muted-foreground/40" />
+				<span className="text-[10px] text-muted-foreground/40">{compact ? "Generating..." : prompt.length > 40 ? `${prompt.slice(0, 37)}...` : prompt}</span>
+			</div>
+		</div>
+	);
 
 	if (compact) {
-		// Grid cell — thumbnail with overlay label
+		if (isRunning) return skeleton("aspect-[4/3]");
+		if (isError) return (
+			<div className="aspect-[4/3] rounded-lg border border-red-500/20 bg-red-500/5 flex items-center justify-center">
+				<XCircleIcon className="size-4 text-red-500/60" />
+			</div>
+		);
+		if (!hasImage) return null;
 		return (
-			<div className={cn(
-				"rounded-lg border overflow-hidden transition-colors",
-				isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
-			)}>
-				{hasImage ? (
-					<div className="relative aspect-[4/3]">
-						{/* eslint-disable-next-line @next/next/no-img-element */}
-						<img
-							src={imageUrl}
-							alt={String(tool.args.prompt || "")}
-							className="w-full h-full object-cover"
-						/>
-						<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
-							<span className="text-[10px] text-white/80 line-clamp-1 leading-tight">
-								{String(tool.args.prompt || "")}
-							</span>
-						</div>
-					</div>
-				) : (
-					<div className="aspect-[4/3] flex items-center justify-center">
-						{isRunning ? (
-							<Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-						) : isError ? (
-							<XCircleIcon className="size-4 text-red-500" />
-						) : (
-							<ImageIcon className="size-4 text-muted-foreground" />
-						)}
-					</div>
-				)}
+			<div className="relative rounded-lg overflow-hidden border border-border/40 aspect-[4/3] group">
+				{/* eslint-disable-next-line @next/next/no-img-element */}
+				<img src={imageUrl} alt={prompt} className="w-full h-full object-cover" />
+				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
+					<span className="text-[10px] text-white/90 line-clamp-2 leading-tight">{prompt}</span>
+				</div>
 			</div>
 		);
 	}
 
-	// Standalone — full card with header
-	return (
+	// Standalone states
+	if (isRunning) return <div className="my-1.5">{skeleton("h-28")}</div>;
+	if (isError) return (
 		<div className="my-1.5">
-			<div className={cn(
-				"rounded-xl border overflow-hidden transition-colors",
-				isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
-			)}>
-				<div className="flex items-center gap-2.5 px-3 py-2.5 text-xs">
-					<div className={cn(
-						"flex size-7 items-center justify-center rounded-lg flex-shrink-0",
-						isRunning ? "bg-muted text-muted-foreground" : isError ? "bg-red-500/10 text-red-500" : "bg-foreground/5 text-foreground/70",
-					)}>
-						{isRunning ? (
-							<Loader2Icon className="size-3.5 animate-spin" />
-						) : isError ? (
-							<XCircleIcon className="size-3.5" />
-						) : (
-							<ImageIcon className="size-3.5" />
-						)}
-					</div>
-					<div className="flex-1 min-w-0">
-						<div className={cn("font-medium truncate", isError ? "text-red-500/90" : "text-foreground/90")}>
-							{display.label}
-						</div>
-						<div className="text-[10px] text-muted-foreground/60 mt-0.5">
-							{isRunning ? "Generating image..." : isError ? "Failed" : "Image generated"}
-						</div>
-					</div>
-				</div>
-				{hasImage && (
-					<div className="px-2.5 pb-2.5">
-						{/* eslint-disable-next-line @next/next/no-img-element */}
-						<img
-							src={imageUrl}
-							alt={String(tool.args.prompt || "")}
-							className="rounded-lg w-full max-h-36 object-contain bg-black/5 dark:bg-white/5"
-						/>
-					</div>
-				)}
+			<div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs">
+				<XCircleIcon className="size-3.5 text-red-500" />
+				<span className="text-red-500/80 truncate">{display.label}</span>
+				<span className="text-red-500/50 text-[10px] flex-shrink-0">Failed</span>
+			</div>
+		</div>
+	);
+	if (!hasImage) return null;
+
+	// Loaded — image is the hero, prompt on hover
+	return (
+		<div className="my-1.5 group relative rounded-xl overflow-hidden border border-border/40 max-w-xs">
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img
+				src={imageUrl}
+				alt={prompt}
+				className="w-full max-h-44 object-contain bg-black/5 dark:bg-white/5"
+			/>
+			<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
+				<span className="text-[11px] text-white/90 line-clamp-2 leading-snug">{prompt}</span>
 			</div>
 		</div>
 	);

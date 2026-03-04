@@ -420,6 +420,11 @@ noscript pre {
   100% { opacity: 0; transform: scale(1.4); }
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
