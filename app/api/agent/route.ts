@@ -129,22 +129,28 @@ export async function POST(req: Request) {
 				if (event.type === "tool_execution_end") {
 					// Extract text content from pi's tool result format
 					let output: unknown = event.result;
+					let details: Record<string, unknown> | undefined;
 					if (event.result?.content) {
 						const textParts = event.result.content
 							.filter((c: { type: string }) => c.type === "text")
 							.map((c: { text: string }) => c.text);
 						output = textParts.join("");
+						if (event.result.details && typeof event.result.details === "object") {
+							details = event.result.details as Record<string, unknown>;
+						}
 					}
 					enqueue({
 						type: "tool-output-available",
 						toolCallId: event.toolCallId,
 						output,
+						...(details && { details }),
 					});
 					// Log tool execution
 					const tn = event.toolName ?? "?";
 					const args = toolArgs.get(event.toolCallId) ?? {};
 					let detail = "";
-					if (tn === "write" || tn === "read" || tn === "edit") detail = ` path="${trunc(args.path ?? args.file_path, 60)}"`;
+					if (tn === "generate_image") detail = ` prompt="${trunc(args.prompt, 50)}"`;
+					else if (tn === "write" || tn === "read" || tn === "edit") detail = ` path="${trunc(args.path ?? args.file_path, 60)}"`;
 					else if (tn === "grep" || tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
 					console.log(`[route] tool:${tn}${detail}`);
 				}

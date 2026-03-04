@@ -399,7 +399,12 @@ export function useChatAgent() {
 							} else if (data.type === "tool-output-available" && data.toolCallId) {
 								console.log(`[tool] OUTPUT ${toolNameById.get(data.toolCallId)} id=${data.toolCallId}`);
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
-								updateTool(data.toolCallId, (t) => ({ ...t, state: "completed", output: result }));
+								updateTool(data.toolCallId, (t) => ({
+									...t,
+									state: "completed",
+									output: result,
+									...(data.details && { details: data.details as Record<string, unknown> }),
+								}));
 								// Interim refresh for real-time feedback (debounced fetch)
 								const tn = toolNameById.get(data.toolCallId);
 								if (tn === "write" || tn === "writeFile" || tn === "edit" || tn === "bash") {

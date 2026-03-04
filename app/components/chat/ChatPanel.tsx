@@ -42,6 +42,7 @@ import {
 	FileEditIcon,
 	FileIcon,
 	ExternalLinkIcon,
+	ImageIcon,
 	FilmIcon,
 	GraduationCapIcon,
 	HeartIcon,
@@ -129,6 +130,7 @@ const TOOL_LABELS: Record<string, string> = {
 	grep: "Searching…",
 	find: "Finding…",
 	ls: "Listing…",
+	generate_image: "Generating image…",
 };
 
 function toolDisplayInfo(tool: ToolCall): ToolDisplay {
@@ -200,6 +202,15 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		};
 	}
 
+	if (name === "generate_image") {
+		const prompt = String(args.prompt || "");
+		const short = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
+		return {
+			icon: <ImageIcon className="size-3.5" />,
+			label: short || "Generating image…",
+		};
+	}
+
 	// Generic
 	const argSummary = args.path || args.file_path || args.command || "";
 	const label = argSummary
@@ -210,6 +221,84 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		label: label.length > 60 ? `${label.slice(0, 57)}...` : label,
 	};
 }
+
+/* ------------------------------------------------------------------ */
+/*  Image tool card                                                    */
+/* ------------------------------------------------------------------ */
+
+const ImageToolCard = memo(function ImageToolCard({
+	tool,
+	display,
+	compact,
+}: {
+	tool: ToolCall;
+	display: ToolDisplay;
+	compact: boolean;
+}) {
+	const isRunning = tool.state === "running";
+	const isError = tool.state === "error";
+	const imageUrl = tool.details?.imageUrl as string | undefined;
+	const hasImage = imageUrl && !isRunning && !isError;
+	const prompt = String(tool.args.prompt || "");
+
+	// Shimmer skeleton for loading state
+	const skeleton = (className: string) => (
+		<div className={cn("relative overflow-hidden bg-muted/40 border border-border/40 rounded-lg", className)}>
+			<div className="absolute inset-0 bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent animate-[shimmer_2s_infinite]" />
+			<div className="flex flex-col items-center justify-center gap-2 h-full">
+				<ImageIcon className="size-4 text-muted-foreground/40" />
+				<span className="text-[10px] text-muted-foreground/40">{compact ? "Generating..." : prompt.length > 40 ? `${prompt.slice(0, 37)}...` : prompt}</span>
+			</div>
+		</div>
+	);
+
+	if (compact) {
+		if (isRunning) return skeleton("aspect-[4/3]");
+		if (isError) return (
+			<div className="aspect-[4/3] rounded-lg border border-red-500/20 bg-red-500/5 flex items-center justify-center">
+				<XCircleIcon className="size-4 text-red-500/60" />
+			</div>
+		);
+		if (!hasImage) return null;
+		return (
+			<div className="relative rounded-lg overflow-hidden border border-border/40 aspect-[4/3] group">
+				{/* eslint-disable-next-line @next/next/no-img-element */}
+				<img src={imageUrl} alt={prompt} className="w-full h-full object-cover" />
+				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
+					<span className="text-[10px] text-white/90 line-clamp-2 leading-tight">{prompt}</span>
+				</div>
+			</div>
+		);
+	}
+
+	// Standalone states
+	if (isRunning) return <div className="my-1.5">{skeleton("h-28")}</div>;
+	if (isError) return (
+		<div className="my-1.5">
+			<div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs">
+				<XCircleIcon className="size-3.5 text-red-500" />
+				<span className="text-red-500/80 truncate">{display.label}</span>
+				<span className="text-red-500/50 text-[10px] flex-shrink-0">Failed</span>
+			</div>
+		</div>
+	);
+	if (!hasImage) return null;
+
+	// Loaded — image is the hero, prompt on hover
+	return (
+		<div className="my-1.5 group relative rounded-xl overflow-hidden border border-border/40 max-w-xs">
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img
+				src={imageUrl}
+				alt={prompt}
+				className="w-full max-h-44 object-contain bg-black/5 dark:bg-white/5"
+			/>
+			<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
+				<span className="text-[11px] text-white/90 line-clamp-2 leading-snug">{prompt}</span>
+			</div>
+		</div>
+	);
+});
 
 /** Extract filename from tool args */
 function toolFilename(tool: ToolCall): string | null {
@@ -302,6 +391,11 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 		);
 	}
 
+	// Image generation card — rendered by ImageToolCard below
+	if (tool.toolName === "generate_image") {
+		return <ImageToolCard tool={tool} display={display} compact={false} />;
+	}
+
 	// Default tool card — click opens file if applicable
 	const stateIcon = isRunning ? (
 		<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
@@ -376,18 +470,52 @@ const AssistantMessage = memo(function AssistantMessage({
 					</div>
 				)}
 
-				{/* Parts — interleaved text + tools */}
-				{msg.parts?.map((part, i) =>
-					part.type === "tool" ? (
-						<ToolCallCard key={part.tool.id} tool={part.tool} />
-					) : part.text ? (
-						<Message key={`text-${i}`} from="assistant">
-							<MessageContent>
-								<MessageResponse>{part.text}</MessageResponse>
-							</MessageContent>
-						</Message>
-					) : null,
-				)}
+				{/* Parts — interleaved text + tools, with image grouping */}
+				{(() => {
+					if (!msg.parts) return null;
+					const elements: React.ReactNode[] = [];
+					let i = 0;
+					while (i < msg.parts.length) {
+						const part = msg.parts[i];
+						if (part.type === "tool" && part.tool.toolName === "generate_image") {
+							// Collect consecutive image tools
+							const group: ToolCall[] = [];
+							while (i < msg.parts.length) {
+								const p = msg.parts[i];
+								if (p.type === "tool" && p.tool.toolName === "generate_image") {
+									group.push(p.tool);
+									i++;
+								} else break;
+							}
+							if (group.length === 1) {
+								elements.push(<ToolCallCard key={group[0].id} tool={group[0]} />);
+							} else {
+								elements.push(
+									<div key={`img-group-${group[0].id}`} className="my-1.5 grid grid-cols-2 gap-2">
+										{group.map((t) => (
+											<ImageToolCard key={t.id} tool={t} display={toolDisplayInfo(t)} compact />
+										))}
+									</div>,
+								);
+							}
+						} else if (part.type === "tool") {
+							elements.push(<ToolCallCard key={part.tool.id} tool={part.tool} />);
+							i++;
+						} else if (part.text) {
+							elements.push(
+								<Message key={`text-${i}`} from="assistant">
+									<MessageContent>
+										<MessageResponse>{part.text}</MessageResponse>
+									</MessageContent>
+								</Message>,
+							);
+							i++;
+						} else {
+							i++;
+						}
+					}
+					return elements;
+				})()}
 
 				{/* Fallback for messages without parts */}
 				{!msg.parts?.length && msg.content && (

@@ -4,6 +4,7 @@ export interface ToolCall {
 	args: Record<string, unknown>;
 	state: "running" | "completed" | "error";
 	output?: string;
+	details?: Record<string, unknown>;
 }
 
 export type MessagePart =
