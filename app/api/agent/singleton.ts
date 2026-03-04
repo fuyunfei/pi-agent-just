@@ -149,7 +149,7 @@ const sessions: Map<string, Singleton> =
 	?? ((globalThis as Record<string, unknown>).__piSessions = new Map<string, Singleton>());
 
 // In-memory image store — keyed by unique ID, persists across HMR
-interface StoredImage { data: Buffer; mime: string }
+interface StoredImage { data: Buffer; mime: string; sessionId: string }
 const imageStore: Map<string, StoredImage> =
 	(globalThis as Record<string, unknown>).__piImages as Map<string, StoredImage>
 	?? ((globalThis as Record<string, unknown>).__piImages = new Map<string, StoredImage>());
@@ -157,6 +157,14 @@ const imageStore: Map<string, StoredImage> =
 export function getStoredImage(id: string): StoredImage | undefined {
 	return imageStore.get(id);
 }
+
+/** Remove all images belonging to a session. */
+function evictSessionImages(sessionId: string) {
+	for (const [id, img] of imageStore) {
+		if (img.sessionId === sessionId) imageStore.delete(id);
+	}
+}
+
 const MAX_SESSIONS = 10;
 const SESSION_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -166,6 +174,7 @@ function evictSessions() {
 	for (const [id, s] of sessions) {
 		if (now - s.lastAccess > SESSION_TTL) {
 			console.log(`[agent] evict session ${id.slice(0, 8)} (expired)`);
+			evictSessionImages(id);
 			sessions.delete(id);
 		}
 	}
@@ -177,6 +186,7 @@ function evictSessions() {
 		}
 		if (oldestId) {
 			console.log(`[agent] evict session ${oldestId.slice(0, 8)} (over limit)`);
+			evictSessionImages(oldestId);
 			sessions.delete(oldestId);
 		}
 	}
@@ -188,7 +198,7 @@ function evictSessions() {
 
 const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
-function createImageGenTool(apiKey: string) {
+function createImageGenTool(apiKey: string, sessionId: string) {
 	return {
 		name: "generate_image",
 		label: "Generate Image",
@@ -228,7 +238,7 @@ function createImageGenTool(apiKey: string) {
 			const mime = header.match(/data:([^;]+)/)?.[1] || "image/png";
 			const buf = Buffer.from(b64, "base64");
 			const id = randomUUID().slice(0, 12);
-			imageStore.set(id, { data: buf, mime });
+			imageStore.set(id, { data: buf, mime, sessionId });
 			const url = `/api/img/${id}`;
 			console.log(`[image] generated id=${id} size=${(buf.length / 1024).toFixed(0)}KB`);
 			return {
@@ -296,7 +306,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		grep: createGrepTool(mountPoint, {
 			operations: createOverlayGrepOps(overlayFs),
 		}),
-		generate_image: createImageGenTool(apiKey),
+		generate_image: createImageGenTool(apiKey, sessionId),
 	};
 
 	const agent = new Agent({
@@ -428,6 +438,7 @@ export async function clearSingleton(sessionId = "default") {
 	if (session.isStreaming) {
 		await session.abort();
 	}
+	evictSessionImages(sessionId);
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
 	await session.newSession();
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
