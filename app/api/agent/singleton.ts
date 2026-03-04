@@ -223,7 +223,7 @@ function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: st
 			const url = `/img/${name}`;
 			console.log(`[image] generated ${name} size=${(buf.length / 1024).toFixed(0)}KB`);
 			return {
-				content: [{ type: "text", text: `Image saved to img/${name}` }],
+				content: [{ type: "text", text: `Image saved. Use: <Img src="/img/${name}" />` }],
 				details: { imageUrl: url },
 			};
 		},
