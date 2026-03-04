@@ -435,7 +435,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		};
 		return (
 			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }} className="studio-surface">
-				<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "system-ui" }}>Compilation Error</div>
+				<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "Inter, system-ui" }}>Compilation Error</div>
 				<div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word", whiteSpace: "pre-wrap", maxHeight: 120, overflow: "auto" }}>{error}</div>
 				<button
 					type="button"
@@ -505,7 +505,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 							background: "rgba(10,10,30,0.92)", backdropFilter: "blur(4px)",
 						}}
 					>
-						<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "system-ui" }}>Runtime Error</div>
+						<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "Inter, system-ui" }}>Runtime Error</div>
 						<div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word", whiteSpace: "pre-wrap", maxHeight: 100, overflow: "auto" }}>{runtimeError}</div>
 						<button
 							type="button"
@@ -583,7 +583,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 						);
 					})}
 				</div>
-				<div style={{ fontSize: 11, fontFamily: "system-ui", color: "var(--muted-foreground)", flexShrink: 0, whiteSpace: "nowrap" }}>
+				<div style={{ fontSize: 11, fontFamily: "Inter, system-ui", color: "var(--muted-foreground)", flexShrink: 0, whiteSpace: "nowrap" }}>
 					{formatTime(globalFrame, fps)} / {formatTime(totalFrames, fps)}
 				</div>
 			</div>

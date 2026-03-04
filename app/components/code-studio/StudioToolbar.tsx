@@ -291,7 +291,7 @@ export function StudioToolbar() {
 	const dispatch = useStudioDispatch();
 
 	return (
-		<div className="flex items-center h-[35px] flex-shrink-0 bg-background/60 backdrop-blur-sm">
+		<div className="flex items-center h-[35px] flex-shrink-0 bg-transparent absolute top-0 left-0 right-0 z-10">
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Button

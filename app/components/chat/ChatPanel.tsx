@@ -512,50 +512,6 @@ function ScrollOnNewMessage({ count }: { count: number }) {
 /*  Model selector                                                     */
 /* ------------------------------------------------------------------ */
 
-function ModelSelector({ models, current, onSwitch }: {
-	models: ModelInfo[];
-	current: ModelInfo | null;
-	onSwitch: (provider: string, id: string) => void;
-}) {
-	const [open, setOpen] = useState(false);
-	const active = current || DEFAULT_MODEL;
-	// Short label: "Gemini 3 Flash" → "G3 Flash", "Haiku 4.5" stays
-	const shortLabel = active.label.replace(/^Gemini /, "G");
-	const isSelected = (m: ModelInfo) => m.id === active.id && m.provider === active.provider;
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<button
-					type="button"
-					className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-				>
-					<span className="truncate max-w-[90px]">{shortLabel}</span>
-					<ChevronDownIcon className="size-3 opacity-50" />
-				</button>
-			</PopoverTrigger>
-			<PopoverContent align="start" className="w-52 p-1" sideOffset={8}>
-				{models.map((m) => (
-					<button
-						key={`${m.provider}/${m.id}`}
-						type="button"
-						onClick={() => { onSwitch(m.provider, m.id); setOpen(false); }}
-						className={cn(
-							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors",
-							isSelected(m)
-								? "bg-accent text-foreground font-medium"
-								: "text-muted-foreground hover:bg-accent/50",
-						)}
-					>
-						<CheckIcon className={cn("size-3 flex-shrink-0", isSelected(m) ? "text-emerald-500" : "invisible")} />
-						<span className="flex-1 truncate">{m.label}</span>
-						<span className="text-[10px] text-muted-foreground/50">{m.desc}</span>
-					</button>
-				))}
-			</PopoverContent>
-		</Popover>
-	);
-}
-
 const THINKING_LABELS: Record<string, string> = {
 	off: "Off",
 	minimal: "Minimal",
@@ -565,42 +521,104 @@ const THINKING_LABELS: Record<string, string> = {
 	xhigh: "Max",
 };
 
-function ThinkingSelector({ thinking, onSwitch }: {
+function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }: {
+	models: ModelInfo[];
+	current: ModelInfo | null;
+	onSwitch: (provider: string, id: string) => void;
 	thinking: ThinkingState;
-	onSwitch: (level: string) => void;
+	onSwitchThinking: (level: string) => void;
 }) {
 	const [open, setOpen] = useState(false);
-	if (!thinking.supported || thinking.available.length <= 1) return null;
-	const label = THINKING_LABELS[thinking.level] || thinking.level;
+	const active = current || DEFAULT_MODEL;
+	const isSelected = (m: ModelInfo) => m.id === active.id && m.provider === active.provider;
+	const showThinking = thinking.supported && thinking.available.length > 1;
+	const thinkingOn = showThinking && thinking.level !== "off";
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<button
 					type="button"
-					className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+					className={cn(
+						"group flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-all duration-150",
+						open
+							? "bg-accent text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent/50 active:bg-accent/70",
+					)}
 				>
-					<BrainIcon className="size-3 opacity-60" />
-					<span>{label}</span>
-					<ChevronDownIcon className="size-3 opacity-50" />
+					<span className="truncate max-w-[100px]">{active.label}</span>
+					{thinkingOn && (
+						<span className="flex items-center gap-1 text-brand-clay/60">
+							<span className="text-[9px]">·</span>
+							<BrainIcon className="size-3" />
+						</span>
+					)}
+					<ChevronDownIcon className={cn(
+						"size-3 opacity-40 transition-transform duration-200",
+						open && "rotate-180",
+					)} />
 				</button>
 			</PopoverTrigger>
-			<PopoverContent align="start" className="w-36 p-1" sideOffset={8}>
-				{thinking.available.map((level) => (
-					<button
-						key={level}
-						type="button"
-						onClick={() => { onSwitch(level); setOpen(false); }}
-						className={cn(
-							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors",
-							level === thinking.level
-								? "bg-accent text-foreground font-medium"
-								: "text-muted-foreground hover:bg-accent/50",
-						)}
-					>
-						<CheckIcon className={cn("size-3 flex-shrink-0", level === thinking.level ? "text-emerald-500" : "invisible")} />
-						<span className="flex-1">{THINKING_LABELS[level] || level}</span>
-					</button>
-				))}
+			<PopoverContent align="end" className="w-56 p-1" sideOffset={8}>
+				{models.map((m) => {
+					const selected = isSelected(m);
+					return (
+						<button
+							key={`${m.provider}/${m.id}`}
+							type="button"
+							onClick={() => { onSwitch(m.provider, m.id); setOpen(false); }}
+							className={cn(
+								"group/item flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-left transition-all duration-150",
+								selected
+									? "bg-accent text-foreground"
+									: "text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/80",
+							)}
+						>
+							<span className={cn(
+								"size-1.5 rounded-full flex-shrink-0 transition-all duration-150",
+								selected
+									? "bg-brand-moss shadow-[0_0_4px_var(--brand-moss)]"
+									: "bg-muted-foreground/15 group-hover/item:bg-muted-foreground/30",
+							)} />
+							<span className="flex-1 truncate">{m.label}</span>
+							<span className={cn(
+								"text-[10px] transition-colors duration-150",
+								selected ? "text-muted-foreground/50" : "text-muted-foreground/25 group-hover/item:text-muted-foreground/45",
+							)}>{m.desc}</span>
+						</button>
+					);
+				})}
+				{showThinking && (
+					<>
+						<div className="mx-2.5 my-1 border-t border-border/20" />
+						<div className="px-2.5 pt-1 pb-1.5 flex items-center justify-between">
+							<span className="text-[10px] text-muted-foreground/35 flex items-center gap-1">
+								<BrainIcon className="size-2.5" />
+								Thinking
+							</span>
+						</div>
+						<div className="mx-1.5 mb-1.5 flex rounded-lg bg-muted/50 p-0.5">
+							{thinking.available.map((level) => {
+								const selected = level === thinking.level;
+								return (
+									<button
+										key={level}
+										type="button"
+										onClick={() => onSwitchThinking(level)}
+										className={cn(
+											"flex-1 rounded-md py-1 text-[11px] text-center transition-all duration-150",
+											selected
+												? "bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.15)]"
+												: "text-muted-foreground/40 hover:text-muted-foreground active:text-foreground",
+										)}
+									>
+										{THINKING_LABELS[level] || level}
+									</button>
+								);
+							})}
+						</div>
+					</>
+				)}
 			</PopoverContent>
 		</Popover>
 	);
@@ -679,36 +697,58 @@ export function ChatPanel() {
 	}, []);
 
 	return (
-		<div className="flex flex-col h-full bg-background">
+		<div className="flex flex-col h-full" style={{ background: "#FAFAF8" }}>
 			<Conversation className="flex-1 relative chat-scroll">
 				<ScrollOnNewMessage count={messages.length} />
 				<ConversationContent className="gap-6 px-4 py-6">
 					{/* Empty state */}
 					{messages.length === 0 && (
-						<div className="flex flex-col items-center justify-center h-full gap-6 text-center">
-							<div className="space-y-2">
-								<p className="text-lg font-medium text-foreground">
-									What story do you want to tell?
-								</p>
-								<p className="text-sm text-muted-foreground">
-									Describe your video — I&apos;ll bring it to life.
-								</p>
-							</div>
-							<div className="grid grid-cols-2 gap-2.5 w-full max-w-md">
-								{visibleSuggestions.map((s) => (
-									<button
-										key={s.label}
-										type="button"
-										onClick={() => send(s.prompt)}
-										className="flex flex-col items-start gap-1.5 p-3 rounded-xl border border-border/60 text-left hover:bg-accent/50 hover:border-border transition-colors group"
-									>
-										<div className="flex items-center gap-2">
-											<s.icon className="size-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
-											<span className="text-xs font-medium text-foreground">{s.label}</span>
-										</div>
-										<span className="text-[11px] text-muted-foreground/70 leading-snug">{s.desc}</span>
-									</button>
-								))}
+						<div className="flex flex-col items-center justify-center h-full text-center px-6">
+							<div className="flex flex-col items-center gap-12 max-w-md w-full">
+								{/* Brand identity */}
+								<div className="flex flex-col items-center gap-6">
+	{/* No logo in chat sidebar */}
+									<div className="space-y-3">
+										<h1 className="text-xl tracking-tight" style={{ fontFamily: "'Noto Serif', serif", color: "#282828", fontWeight: 500 }}>
+											What story do you want to tell?
+										</h1>
+										<p className="text-[13px] leading-relaxed" style={{ color: "#7A766D" }}>
+											Describe your video — I&apos;ll bring it to life.
+										</p>
+									</div>
+								</div>
+								{/* Suggestion cards */}
+								<div className="grid grid-cols-2 gap-3 w-full">
+									{visibleSuggestions.map((s) => (
+										<button
+											key={s.label}
+											type="button"
+											onClick={() => send(s.prompt)}
+											className="flex flex-col items-start gap-3 p-4 rounded-xl text-left transition-all duration-200 group active:scale-[0.98]"
+											style={{
+												background: "#FFFFFF",
+												border: "1px solid #E8E7E3",
+												boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+											}}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.borderColor = "#D6D4CE";
+												e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.06)";
+												e.currentTarget.style.transform = "translateY(-1px)";
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.borderColor = "#E8E7E3";
+												e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.03)";
+												e.currentTarget.style.transform = "translateY(0)";
+											}}
+										>
+											<s.icon style={{ color: "#C07F5E" }} className="size-[18px] opacity-70 group-hover:opacity-100 transition-opacity duration-200" strokeWidth={1.5} />
+											<div className="space-y-1">
+												<span className="text-[13px] font-medium block" style={{ color: "#282828" }}>{s.label}</span>
+												<span className="text-[11px] leading-[1.5] block" style={{ color: "#A8A49C" }}>{s.desc}</span>
+											</div>
+										</button>
+									))}
+								</div>
 							</div>
 						</div>
 					)}
@@ -751,7 +791,7 @@ export function ChatPanel() {
 			</Conversation>
 
 			{/* Input area */}
-			<div className="relative border-t border-border/50 p-3">
+			<div className="relative p-3" style={{ borderTop: "1px solid #E8E7E3" }}>
 				<SlashCommandMenu
 					items={slashMenu.items}
 					heading={slashMenu.heading}
@@ -784,8 +824,7 @@ export function ChatPanel() {
 							>
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
-							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} />
-							<ThinkingSelector thinking={thinking} onSwitch={switchThinkingLevel} />
+							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} />
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">

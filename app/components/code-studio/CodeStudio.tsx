@@ -65,10 +65,8 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 			style={{ ...style, height: "100dvh", overflow: "hidden" }}
 		>
 			<FileTreeSidebar />
-			<div className="flex flex-1 flex-col overflow-hidden" style={{ minWidth: 0 }}>
-				<div className="relative z-10">
-					<StudioToolbar />
-				</div>
+			<div className="relative flex flex-1 flex-col overflow-hidden" style={{ minWidth: 0 }}>
+				<StudioToolbar />
 				<ContentArea />
 			</div>
 		</div>

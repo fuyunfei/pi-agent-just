@@ -35,7 +35,7 @@ export type StudioAction =
 const initialState: StudioState = {
 	tabs: [],
 	activeTabId: null,
-	sidebarOpen: true,
+	sidebarOpen: false,
 	changes: [],
 	mountPoint: "",
 };
