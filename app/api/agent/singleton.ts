@@ -181,7 +181,7 @@ function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: st
 	return {
 		name: "generate_image",
 		label: "Generate Image",
-		description: "Generate an image from a text prompt and save it with the given filename. Returns a URL you can use with <Img src={url}>.",
+		description: "Generate an illustration or photo for use as a visual element (not a background). Returns a URL for <Img src={url}>.",
 		parameters: Type.Object({
 			prompt: Type.String({ description: "Describe the image to generate" }),
 			filename: Type.String({ description: "Filename for the image, e.g. 'hero.png'" }),

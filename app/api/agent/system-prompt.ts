@@ -12,7 +12,7 @@ Built-in:
 - grep: Search file contents for patterns
 - ls: List directory contents
 - find: Find files by glob pattern
-- generate_image: Generate an image with the given filename (e.g. \`hero.png\`). Returns a URL to use with \`<Img>\`. Be descriptive in the prompt. Use it smartly with design taste, instead of making a slide show.
+- generate_image: Generate an illustration or photo to use as a visual element — NOT as a background. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.
 
 
 ## Code structure
