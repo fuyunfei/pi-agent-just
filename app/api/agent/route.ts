@@ -131,9 +131,7 @@ export async function POST(req: Request) {
 					const args = toolArgs.get(event.toolCallId) ?? {};
 					let detail = "";
 					if (tn === "write" || tn === "read" || tn === "edit") detail = ` path="${trunc(args.path ?? args.file_path, 60)}"`;
-					else if (tn === "bash") detail = ` cmd="${trunc(args.command, 60)}"`;
-					else if (tn === "grep") detail = ` pattern="${trunc(args.pattern, 40)}"`;
-					else if (tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
+					else if (tn === "grep" || tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
 					console.log(`[route] tool:${tn}${detail}`);
 				}
 

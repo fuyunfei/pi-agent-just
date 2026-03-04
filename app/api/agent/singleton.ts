@@ -1,9 +1,9 @@
 /**
- * Singleton module — OverlayFs + Bash + AgentSession persist across requests.
+ * Singleton module — OverlayFs + AgentSession persist across requests.
  * Uses a temporary empty directory as the overlay root (pure in-memory sandbox).
  */
 
-import { Bash, OverlayFs } from "just-bash";
+import { OverlayFs } from "just-bash";
 import { mkdtempSync } from "fs";
 import { join, relative } from "path";
 import { tmpdir } from "os";
@@ -11,7 +11,6 @@ import { minimatch } from "minimatch";
 import {
 	AgentSession,
 	AuthStorage,
-	createBashTool,
 	createReadTool,
 	createWriteTool,
 	createEditTool,
@@ -22,7 +21,6 @@ import {
 	ModelRegistry,
 	SessionManager,
 	SettingsManager,
-	type BashOperations,
 	type ReadOperations,
 	type WriteOperations,
 	type EditOperations,
@@ -44,11 +42,11 @@ You help users create and edit motion graphics clips as .tsx files.
 
 Built-in:
 - read: Read file contents
-- bash: Execute bash commands
 - edit: Make surgical edits to files (find exact text and replace)
 - write: Create or overwrite files
 - grep: Search file contents for patterns
 - ls: List directory contents
+- find: Find files by glob pattern
 
 
 ## Code structure
@@ -199,35 +197,8 @@ Key patterns:
 - Do NOT use any packages beyond the Remotion imports listed above`;
 
 // ---------------------------------------------------------------------------
-// just-bash → pi-coding-agent adapters
+// OverlayFs → pi-coding-agent adapters
 // ---------------------------------------------------------------------------
-
-function createLazyBashOps(getBash: () => Bash): BashOperations {
-	return {
-		async exec(command, cwd, { onData, signal, timeout }) {
-			const execPromise = getBash().exec(command, { cwd });
-			let result: Awaited<ReturnType<Bash["exec"]>>;
-			if (timeout && timeout > 0) {
-				const timeoutMs = timeout * 1000;
-				result = (await Promise.race([
-					execPromise,
-					new Promise((_, reject) =>
-						setTimeout(
-							() => reject(new Error(`timeout:${timeout}`)),
-							timeoutMs,
-						),
-					),
-				])) as typeof result;
-			} else {
-				result = await execPromise;
-			}
-			if (signal?.aborted) throw new Error("aborted");
-			if (result.stdout) onData(Buffer.from(result.stdout, "utf-8"));
-			if (result.stderr) onData(Buffer.from(result.stderr, "utf-8"));
-			return { exitCode: result.exitCode };
-		},
-	};
-}
 
 function createOverlayReadOps(fs: OverlayFs): ReadOperations {
 	return {
@@ -326,7 +297,6 @@ interface Singleton {
 	session: AgentSession;
 	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
-	resetBash: () => void;
 	lastAccess: number;
 }
 
@@ -376,13 +346,6 @@ export function getOrCreateSingleton(sessionId = "default") {
 	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
 	const mountPoint = overlayFs.getMountPoint();
 
-	// Lazy-init Bash — only create (and populate 179 system files) when first used
-	let bash: Bash | null = null;
-	const getBash = () => {
-		if (!bash) bash = new Bash({ fs: overlayFs, cwd: mountPoint });
-		return bash;
-	};
-
 	// --- Pi-coding-agent setup ---
 	const provider = process.env.OPENROUTER_API_KEY
 		? "openrouter"
@@ -405,7 +368,6 @@ export function getOrCreateSingleton(sessionId = "default") {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const sandboxedTools: Record<string, any> = {
-		bash: createBashTool(mountPoint, { operations: createLazyBashOps(getBash) }),
 		read: createReadTool(mountPoint, {
 			operations: createOverlayReadOps(overlayFs),
 		}),
@@ -475,7 +437,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, resetBash: () => { bash = null; }, lastAccess: Date.now() };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now() };
 	sessions.set(sessionId, entry);
 	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
 	return entry;
@@ -551,12 +513,11 @@ export function getUserFiles(sessionId = "default") {
 export async function clearSingleton(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return;
-	const { session, overlayFs, resetBash } = s;
+	const { session, overlayFs } = s;
 	if (session.isStreaming) {
 		await session.abort();
 	}
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
-	resetBash();
 	await session.newSession();
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }
