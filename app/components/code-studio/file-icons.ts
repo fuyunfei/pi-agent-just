@@ -6,6 +6,7 @@ import {
 	FileText,
 	Globe,
 	Hash,
+	ImageIcon,
 	Terminal,
 	Braces,
 } from "lucide-react";
@@ -70,6 +71,11 @@ const EXTENSION_TO_ICON: Record<string, LucideIcon> = {
 	toml: Braces,
 	ini: Braces,
 	env: Terminal,
+	png: ImageIcon,
+	jpg: ImageIcon,
+	jpeg: ImageIcon,
+	gif: ImageIcon,
+	webp: ImageIcon,
 };
 
 function getExtension(path: string): string {

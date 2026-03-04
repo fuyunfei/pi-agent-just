@@ -235,6 +235,7 @@ const ImageToolCard = memo(function ImageToolCard({
 	display: ToolDisplay;
 	compact: boolean;
 }) {
+	const [lightbox, setLightbox] = useState(false);
 	const isRunning = tool.state === "running";
 	const isError = tool.state === "error";
 	const imageUrl = tool.details?.imageUrl as string | undefined;
@@ -252,6 +253,16 @@ const ImageToolCard = memo(function ImageToolCard({
 		</div>
 	);
 
+	const lightboxOverlay = lightbox && hasImage ? (
+		<div
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-zoom-out"
+			onClick={() => setLightbox(false)}
+		>
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img src={imageUrl} alt={prompt} className="max-w-[90vw] max-h-[90vh] object-contain" />
+		</div>
+	) : null;
+
 	if (compact) {
 		if (isRunning) return skeleton("aspect-[4/3]");
 		if (isError) return (
@@ -261,13 +272,16 @@ const ImageToolCard = memo(function ImageToolCard({
 		);
 		if (!hasImage) return null;
 		return (
-			<div className="relative rounded-lg overflow-hidden border border-border/40 aspect-[4/3] group">
-				{/* eslint-disable-next-line @next/next/no-img-element */}
-				<img src={imageUrl} alt={prompt} className="w-full h-full object-cover" />
-				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
-					<span className="text-[10px] text-white/90 line-clamp-2 leading-tight">{prompt}</span>
+			<>
+				{lightboxOverlay}
+				<div className="relative rounded-lg overflow-hidden border border-border/40 aspect-[4/3] group cursor-zoom-in" onClick={() => setLightbox(true)}>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={imageUrl} alt={prompt} className="w-full h-full object-cover" />
+					<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
+						<span className="text-[10px] text-white/90 line-clamp-2 leading-tight">{prompt}</span>
+					</div>
 				</div>
-			</div>
+			</>
 		);
 	}
 
@@ -284,19 +298,22 @@ const ImageToolCard = memo(function ImageToolCard({
 	);
 	if (!hasImage) return null;
 
-	// Loaded — image is the hero, prompt on hover
+	// Loaded — image is the hero, prompt on hover, click to enlarge
 	return (
-		<div className="my-1.5 group relative rounded-xl overflow-hidden border border-border/40 max-w-xs">
-			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img
-				src={imageUrl}
-				alt={prompt}
-				className="w-full max-h-44 object-contain bg-black/5 dark:bg-white/5"
-			/>
-			<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
-				<span className="text-[11px] text-white/90 line-clamp-2 leading-snug">{prompt}</span>
+		<>
+			{lightboxOverlay}
+			<div className="my-1.5 group relative rounded-xl overflow-hidden border border-border/40 max-w-xs cursor-zoom-in" onClick={() => setLightbox(true)}>
+				{/* eslint-disable-next-line @next/next/no-img-element */}
+				<img
+					src={imageUrl}
+					alt={prompt}
+					className="w-full max-h-44 object-contain bg-black/5 dark:bg-white/5"
+				/>
+				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
+					<span className="text-[11px] text-white/90 line-clamp-2 leading-snug">{prompt}</span>
+				</div>
 			</div>
-		</div>
+		</>
 	);
 });
 
