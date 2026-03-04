@@ -397,7 +397,7 @@ export function useChatAgent() {
 									});
 								}
 							} else if (data.type === "tool-output-available" && data.toolCallId) {
-								console.log(`[tool] OUTPUT ${toolNameById.get(data.toolCallId)} id=${data.toolCallId}`);
+								console.log(`[tool] OUTPUT ${toolNameById.get(data.toolCallId)} id=${data.toolCallId} details=`, data.details);
 								const result = typeof data.output === "string" ? data.output : JSON.stringify(data.output, null, 2);
 								updateTool(data.toolCallId, (t) => ({
 									...t,
