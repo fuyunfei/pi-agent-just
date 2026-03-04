@@ -31,8 +31,6 @@ import {
 import { Agent, type AgentToolResult } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
-import { randomUUID } from "crypto";
-
 // Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
@@ -148,23 +146,6 @@ const sessions: Map<string, Singleton> =
 	(globalThis as Record<string, unknown>).__piSessions as Map<string, Singleton>
 	?? ((globalThis as Record<string, unknown>).__piSessions = new Map<string, Singleton>());
 
-// In-memory image store — keyed by unique ID, persists across HMR
-interface StoredImage { data: Buffer; mime: string; sessionId: string }
-const imageStore: Map<string, StoredImage> =
-	(globalThis as Record<string, unknown>).__piImages as Map<string, StoredImage>
-	?? ((globalThis as Record<string, unknown>).__piImages = new Map<string, StoredImage>());
-
-export function getStoredImage(id: string): StoredImage | undefined {
-	return imageStore.get(id);
-}
-
-/** Remove all images belonging to a session. */
-function evictSessionImages(sessionId: string) {
-	for (const [id, img] of imageStore) {
-		if (img.sessionId === sessionId) imageStore.delete(id);
-	}
-}
-
 const MAX_SESSIONS = 10;
 const SESSION_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -174,7 +155,6 @@ function evictSessions() {
 	for (const [id, s] of sessions) {
 		if (now - s.lastAccess > SESSION_TTL) {
 			console.log(`[agent] evict session ${id.slice(0, 8)} (expired)`);
-			evictSessionImages(id);
 			sessions.delete(id);
 		}
 	}
@@ -186,7 +166,6 @@ function evictSessions() {
 		}
 		if (oldestId) {
 			console.log(`[agent] evict session ${oldestId.slice(0, 8)} (over limit)`);
-			evictSessionImages(oldestId);
 			sessions.delete(oldestId);
 		}
 	}
@@ -198,17 +177,18 @@ function evictSessions() {
 
 const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
-function createImageGenTool(apiKey: string, sessionId: string) {
+function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: string) {
 	return {
 		name: "generate_image",
 		label: "Generate Image",
-		description: "Generate an image from a text prompt. Returns a URL you can use with <Img src={url}>.",
+		description: "Generate an image from a text prompt and save it with the given filename. Returns a URL you can use with <Img src={url}>.",
 		parameters: Type.Object({
 			prompt: Type.String({ description: "Describe the image to generate" }),
+			filename: Type.String({ description: "Filename for the image, e.g. 'hero.png'" }),
 		}),
 		async execute(
 			_toolCallId: string,
-			params: { prompt: string },
+			params: { prompt: string; filename: string },
 			signal?: AbortSignal,
 		): Promise<AgentToolResult<{ imageUrl?: string }>> {
 			const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -233,16 +213,17 @@ function createImageGenTool(apiKey: string, sessionId: string) {
 			if (!imgUrl?.startsWith("data:image/")) {
 				return { content: [{ type: "text", text: "No image in response" }], details: {} };
 			}
-			// Parse data URI and store
-			const [header, b64] = imgUrl.split(",");
-			const mime = header.match(/data:([^;]+)/)?.[1] || "image/png";
+			// Parse data URI and write to OverlayFs under img/
+			const [, b64] = imgUrl.split(",");
 			const buf = Buffer.from(b64, "base64");
-			const id = randomUUID().slice(0, 12);
-			imageStore.set(id, { data: buf, mime, sessionId });
-			const url = `/api/img/${id}`;
-			console.log(`[image] generated id=${id} size=${(buf.length / 1024).toFixed(0)}KB`);
+			const name = params.filename.replace(/^\/+/, "").split("/").pop()!;
+			const imgDir = join(mountPoint, "img");
+			await overlayFs.mkdir(imgDir, { recursive: true });
+			await overlayFs.writeFile(join(imgDir, name), new Uint8Array(buf));
+			const url = `/img/${name}`;
+			console.log(`[image] generated ${name} size=${(buf.length / 1024).toFixed(0)}KB`);
 			return {
-				content: [{ type: "text", text: `Image generated: ${url}` }],
+				content: [{ type: "text", text: `Image saved to img/${name}` }],
 				details: { imageUrl: url },
 			};
 		},
@@ -306,7 +287,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		grep: createGrepTool(mountPoint, {
 			operations: createOverlayGrepOps(overlayFs),
 		}),
-		generate_image: createImageGenTool(apiKey, sessionId),
+		generate_image: createImageGenTool(apiKey, overlayFs, mountPoint),
 	};
 
 	const agent = new Agent({
@@ -438,7 +419,6 @@ export async function clearSingleton(sessionId = "default") {
 	if (session.isStreaming) {
 		await session.abort();
 	}
-	evictSessionImages(sessionId);
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
 	await session.newSession();
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);

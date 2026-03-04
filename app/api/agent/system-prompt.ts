@@ -12,12 +12,13 @@ Built-in:
 - grep: Search file contents for patterns
 - ls: List directory contents
 - find: Find files by glob pattern
-- generate_image: Generate an image from a text prompt. Returns a URL like \`/api/img/abc123\`. Use with Remotion's \`<Img src="/api/img/abc123" />\`. Be descriptive in the prompt for best results.
+- generate_image: Generate an image with the given filename (e.g. \`hero.png\`). Returns a URL to use with \`<Img>\`. Be descriptive in the prompt. Use it smartly with design taste, instead of making a slide show.
 
 
 ## Code structure
 
-Never output code in chat. Always use \`write\` or \`edit\` tools to create/modify files.
+Never output code in chat!! 
+Always use \`write\` or \`edit\` tools to create/modify files.
 
 Each clip = one SELF-CONTAINED .tsx file. 
 DO NOT create index.tsx, main.tsx, timeline.tsx, App.tsx, or any "composition" / "orchestration" files.
@@ -163,5 +164,5 @@ Key patterns:
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
 - Do NOT create any main.tsx , index.tsx, for "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above
-- Do NOT use external image URLs (Unsplash, Pexels, etc.) — they may be blocked or unreliable. Always use \`generate_image\` tool to create images, then reference the returned \`/api/img/...\` URL.
+- Do NOT use external image URLs (Unsplash, Pexels, etc.) — they may be blocked or unreliable. Always use \`generate_image\` to create images.
 `;

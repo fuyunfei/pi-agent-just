@@ -13,15 +13,41 @@ import {
 	speculateFunctionName,
 } from "@remotion/lambda/client";
 import { COMP_NAME, DISK, RAM, REGION, SITE_NAME, TIMEOUT } from "../../../config.mjs";
-import { getStoredImage } from "../agent/singleton";
+import type { OverlayFs } from "just-bash";
+import { getSessionId, getOrCreateSingleton } from "../agent/singleton";
 
-/** Replace /api/img/xxx URLs with inline data URIs so Lambda can render them. */
-function inlineImages(code: string): string {
-	return code.replace(/\/api\/img\/([a-f0-9-]+)/g, (match, id) => {
-		const img = getStoredImage(id);
-		if (!img) return match;
-		return `data:${img.mime};base64,${img.data.toString("base64")}`;
+const EXT_TO_MIME: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".webp": "image/webp",
+	".gif": "image/gif",
+};
+
+/** Replace /img/... URLs with inline data URIs so Lambda can render them. */
+async function inlineImages(code: string, overlayFs: OverlayFs): Promise<string> {
+	const mountPoint = overlayFs.getMountPoint();
+	const matches: { full: string; relativePath: string }[] = [];
+	code.replace(/\/(img\/.+?\.(png|jpe?g|webp|gif))/g, (full, relativePath) => {
+		matches.push({ full, relativePath });
+		return full;
 	});
+	if (matches.length === 0) return code;
+
+	let result = code;
+	for (const m of matches) {
+		const filePath = `${mountPoint}/${m.relativePath}`;
+		try {
+			const data = await overlayFs.readFileBuffer(filePath);
+			const ext = m.relativePath.substring(m.relativePath.lastIndexOf(".")).toLowerCase();
+			const mime = EXT_TO_MIME[ext] || "image/png";
+			const b64 = Buffer.from(data).toString("base64");
+			result = result.replaceAll(m.full, `data:${mime};base64,${b64}`);
+		} catch {
+			// keep original URL
+		}
+	}
+	return result;
 }
 
 export async function POST(req: Request) {
@@ -44,13 +70,17 @@ export async function POST(req: Request) {
 			);
 		}
 
-		// Inline /api/img/ URLs as data URIs before sending to Lambda
+		// Get OverlayFs for this session to inline image URLs as data URIs
+		const sessionId = getSessionId(req);
+		const { overlayFs } = getOrCreateSingleton(sessionId);
+
+		// Inline /img/ URLs as data URIs before sending to Lambda
 		if (hasScenes) {
 			for (const scene of body.scenes) {
-				scene.code = inlineImages(scene.code);
+				scene.code = await inlineImages(scene.code, overlayFs);
 			}
 		} else if (hasCode) {
-			body.code = inlineImages(body.code);
+			body.code = await inlineImages(body.code, overlayFs);
 		}
 
 		// Build inputProps — pass scenes array or single code
