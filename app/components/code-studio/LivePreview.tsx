@@ -766,7 +766,7 @@ function collectRemotionScenes(
 		scenes.push({ filename: activeFilename, code: activeContent });
 	}
 
-	scenes.sort((a, b) => a.filename.localeCompare(b.filename));
+	// Keep insertion order from changes (= generation order)
 	return scenes;
 }
 

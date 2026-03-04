@@ -305,7 +305,7 @@ export function FileTreeSidebar() {
 				filename: c.path.split("/").pop() || c.path,
 				path: c.path,
 			}))
-			.sort((a, b) => a.filename.localeCompare(b.filename));
+			; // keep generation order from changes
 	}, [changes, remotionPaths]);
 
 	const otherChanges = useMemo(() => {
