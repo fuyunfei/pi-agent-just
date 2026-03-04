@@ -13,6 +13,16 @@ import {
 	speculateFunctionName,
 } from "@remotion/lambda/client";
 import { COMP_NAME, DISK, RAM, REGION, SITE_NAME, TIMEOUT } from "../../../config.mjs";
+import { getStoredImage } from "../agent/singleton";
+
+/** Replace /api/img/xxx URLs with inline data URIs so Lambda can render them. */
+function inlineImages(code: string): string {
+	return code.replace(/\/api\/img\/([a-f0-9-]+)/g, (match, id) => {
+		const img = getStoredImage(id);
+		if (!img) return match;
+		return `data:${img.mime};base64,${img.data.toString("base64")}`;
+	});
+}
 
 export async function POST(req: Request) {
 	try {
@@ -32,6 +42,15 @@ export async function POST(req: Request) {
 				{ error: "Lambda not configured. Set AWS credentials and run: node deploy.mjs" },
 				{ status: 500 },
 			);
+		}
+
+		// Inline /api/img/ URLs as data URIs before sending to Lambda
+		if (hasScenes) {
+			for (const scene of body.scenes) {
+				scene.code = inlineImages(scene.code);
+			}
+		} else if (hasCode) {
+			body.code = inlineImages(body.code);
 		}
 
 		// Build inputProps — pass scenes array or single code
