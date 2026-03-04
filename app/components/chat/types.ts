@@ -32,3 +32,9 @@ export interface SessionUsage {
 	cost: number;
 	contextPercent: number | null;
 }
+
+export interface ThinkingState {
+	level: string;
+	available: string[];
+	supported: boolean;
+}

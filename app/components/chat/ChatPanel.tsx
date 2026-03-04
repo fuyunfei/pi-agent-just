@@ -61,8 +61,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useChatAgent } from "./useChatAgent";
 import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
-import type { ChatMessage, ModelInfo, ToolCall } from "./types";
+import type { ChatMessage, ModelInfo, ThinkingState, ToolCall } from "./types";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
+import { BrainIcon } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/app/lib/models";
 
 /* ------------------------------------------------------------------ */
@@ -555,12 +556,62 @@ function ModelSelector({ models, current, onSwitch }: {
 	);
 }
 
+const THINKING_LABELS: Record<string, string> = {
+	off: "Off",
+	minimal: "Minimal",
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+	xhigh: "Max",
+};
+
+function ThinkingSelector({ thinking, onSwitch }: {
+	thinking: ThinkingState;
+	onSwitch: (level: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	if (!thinking.supported || thinking.available.length <= 1) return null;
+	const label = THINKING_LABELS[thinking.level] || thinking.level;
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button
+					type="button"
+					className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+				>
+					<BrainIcon className="size-3 opacity-60" />
+					<span>{label}</span>
+					<ChevronDownIcon className="size-3 opacity-50" />
+				</button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-36 p-1" sideOffset={8}>
+				{thinking.available.map((level) => (
+					<button
+						key={level}
+						type="button"
+						onClick={() => { onSwitch(level); setOpen(false); }}
+						className={cn(
+							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors",
+							level === thinking.level
+								? "bg-accent text-foreground font-medium"
+								: "text-muted-foreground hover:bg-accent/50",
+						)}
+					>
+						<CheckIcon className={cn("size-3 flex-shrink-0", level === thinking.level ? "text-emerald-500" : "invisible")} />
+						<span className="flex-1">{THINKING_LABELS[level] || level}</span>
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 /* ------------------------------------------------------------------ */
 /*  ChatPanel                                                          */
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, currentModel, switchModel, usage } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -734,6 +785,7 @@ export function ChatPanel() {
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
 							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} />
+							<ThinkingSelector thinking={thinking} onSwitch={switchThinkingLevel} />
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">

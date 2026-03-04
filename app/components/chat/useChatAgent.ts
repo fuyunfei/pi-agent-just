@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
-import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, ToolCall } from "./types";
+import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, ThinkingState, ToolCall } from "./types";
 
 type UIMessage = {
 	id: string;
@@ -24,6 +24,7 @@ export function useChatAgent() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [status, setStatus] = useState<"ready" | "streaming" | "error">("ready");
 	const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
+	const [thinking, setThinking] = useState<ThinkingState>({ level: "off", available: [], supported: false });
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
@@ -47,7 +48,7 @@ export function useChatAgent() {
 		});
 	}, []);
 
-	// Fetch current model on mount
+	// Fetch current model + thinking on mount
 	useEffect(() => {
 		fetch("/api/model")
 			.then((r) => r.json())
@@ -59,6 +60,9 @@ export function useChatAgent() {
 						label: data.current.name || data.current.id,
 						desc: "",
 					});
+				}
+				if (data.thinking) {
+					setThinking(data.thinking);
 				}
 			})
 			.catch(() => {});
@@ -501,10 +505,29 @@ export function useChatAgent() {
 					desc: "",
 				});
 			}
+			if (data.thinking) {
+				setThinking(data.thinking);
+			}
 		} catch {
 			// Model switch failed
 		}
 	}, []);
 
-	return { messages, status, send, stop, clear, currentModel, switchModel, usage };
+	const switchThinkingLevel = useCallback(async (level: string) => {
+		try {
+			const res = await fetch("/api/model", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ thinkingLevel: level }),
+			});
+			const data = await res.json();
+			if (data.thinking) {
+				setThinking(data.thinking);
+			}
+		} catch {
+			// Thinking switch failed
+		}
+	}, []);
+
+	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage };
 }
