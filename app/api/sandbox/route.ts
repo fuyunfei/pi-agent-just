@@ -1,23 +1,19 @@
 /**
- * Sandbox API — list in-memory files, clear session.
+ * Sandbox API — list user project files, clear session, delete file.
  *
- * GET  /api/sandbox → list all files in the sandbox
- * POST /api/sandbox → { action: "clear" }  — reset sandbox to empty
+ * GET  /api/sandbox → list files under mountPoint
+ * POST /api/sandbox → { action: "clear" | "delete" }
  */
 
-import { getOrCreateSingleton, getSessionId, clearSingleton } from "../agent/singleton";
-
-// System paths created by Bash constructor — not user project files
-const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
+import { getOrCreateSingleton, getSessionId, clearSingleton, getUserFiles } from "../agent/singleton";
 
 export async function GET(req: Request) {
 	try {
 		const sid = getSessionId(req);
-		const { overlayFs } = getOrCreateSingleton(sid);
-		const mountPoint = overlayFs.getMountPoint();
-		const changes = overlayFs
-			.getOverlayChanges()
-			.filter((c) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
+		// Ensure session exists (creates if needed), then read user files
+		getOrCreateSingleton(sid);
+		const { changes, mountPoint } = getUserFiles(sid);
+		console.log(`[sandbox] GET sid=${sid.slice(0, 8)} → ${changes.length} files`);
 		return Response.json({ changes, mountPoint });
 	} catch (err) {
 		return Response.json(
@@ -35,7 +31,8 @@ export async function POST(req: Request) {
 
 		if (action === "clear") {
 			await clearSingleton(sid);
-			return Response.json({ ok: true });
+			const { changes, mountPoint } = getUserFiles(sid);
+			return Response.json({ ok: true, changes, mountPoint });
 		}
 
 		if (action === "delete") {
@@ -46,10 +43,7 @@ export async function POST(req: Request) {
 			const { overlayFs } = getOrCreateSingleton(sid);
 			await overlayFs.rm(path);
 			console.log(`[sandbox] delete ${path}`);
-			const mountPoint = overlayFs.getMountPoint();
-			const changes = overlayFs
-				.getOverlayChanges()
-				.filter((c) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
+			const { changes, mountPoint } = getUserFiles(sid);
 			return Response.json({ ok: true, changes, mountPoint });
 		}
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
-import type { ChatMessage, Checkpoint, MessagePart, ModelInfo, SessionUsage, ToolCall } from "./types";
+import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, ThinkingState, ToolCall } from "./types";
 
 type UIMessage = {
 	id: string;
@@ -24,6 +24,7 @@ export function useChatAgent() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [status, setStatus] = useState<"ready" | "streaming" | "error">("ready");
 	const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
+	const [thinking, setThinking] = useState<ThinkingState>({ level: "off", available: [], supported: false });
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
@@ -37,15 +38,17 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
-		}).then(() => {
+		}).then((r) => r.json()).then((data) => {
 			clearDone = true;
-			window.dispatchEvent(new CustomEvent("studio:refresh"));
+			window.dispatchEvent(new CustomEvent("studio:refresh", {
+				detail: { changes: data.changes, mountPoint: data.mountPoint },
+			}));
 		}).catch(() => {
 			clearDone = true;
 		});
 	}, []);
 
-	// Fetch current model on mount
+	// Fetch current model + thinking on mount
 	useEffect(() => {
 		fetch("/api/model")
 			.then((r) => r.json())
@@ -57,6 +60,9 @@ export function useChatAgent() {
 						label: data.current.name || data.current.id,
 						desc: "",
 					});
+				}
+				if (data.thinking) {
+					setThinking(data.thinking);
 				}
 			})
 			.catch(() => {});
@@ -98,8 +104,10 @@ export function useChatAgent() {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ action: "clear" }),
-				}).then(() => {
-					window.dispatchEvent(new CustomEvent("studio:refresh"));
+				}).then((r) => r.json()).then((data) => {
+					window.dispatchEvent(new CustomEvent("studio:refresh", {
+						detail: { changes: data.changes, mountPoint: data.mountPoint },
+					}));
 				}).catch(() => {});
 				return true;
 			}
@@ -407,18 +415,6 @@ export function useChatAgent() {
 								const errorMsg = data.error || data.message || "Unknown error";
 								appendText(`\n\n**Error:** ${errorMsg}`);
 							} else if (data.type === "finish") {
-								if (data.entryId) {
-									// Tag the user message with its entryId for checkpoint rollback
-									setMessages((prev) => {
-										const userIdx = prev.findLastIndex(
-											(m) => m.role === "user" && m.id === userMsg.id,
-										);
-										if (userIdx === -1) return prev;
-										const next = [...prev];
-										next[userIdx] = { ...next[userIdx], entryId: data.entryId };
-										return next;
-									});
-								}
 								if (data.usage) {
 									setUsage(data.usage as SessionUsage);
 								}
@@ -429,8 +425,8 @@ export function useChatAgent() {
 									}));
 								}
 							}
-						} catch {
-							// skip parse errors
+						} catch (parseErr) {
+							console.warn("[sse] parse error:", parseErr, "raw:", jsonStr.slice(0, 200));
 						}
 					}
 				}
@@ -484,48 +480,14 @@ export function useChatAgent() {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "clear" }),
-		}).then(() => {
-			// Tell code-studio to refetch changes
-			window.dispatchEvent(new CustomEvent("studio:refresh"));
+		}).then((r) => r.json()).then((data) => {
+			window.dispatchEvent(new CustomEvent("studio:refresh", {
+				detail: { changes: data.changes, mountPoint: data.mountPoint },
+			}));
 		}).catch(() => {
 			// Server reset failed — UI is already cleared, will resync on next poll
 		});
 	}, [clearChat]);
-
-	const rollback = useCallback(async (entryId: string) => {
-		try {
-			const res = await fetch("/api/checkpoint", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ action: "rollback", entryId }),
-			});
-			if (!res.ok) return;
-
-			// Truncate messages — keep up to and including the rollback user message, drop everything after
-			setMessages((prev) => {
-				const idx = prev.findIndex(
-					(m) => m.role === "user" && m.entryId === entryId,
-				);
-				if (idx === -1) return prev;
-				return prev.slice(0, idx + 1);
-			});
-
-			// Truncate history ref to match (keep up to the matching user message)
-			const histIdx = historyRef.current.findIndex(
-				(m) => m.role === "user" && messages.find(
-					(cm) => cm.id === m.id && cm.entryId === entryId,
-				),
-			);
-			if (histIdx !== -1) {
-				historyRef.current = historyRef.current.slice(0, histIdx + 1);
-			}
-
-			// Notify CodeStudio to refresh files
-			window.dispatchEvent(new CustomEvent("studio:refresh"));
-		} catch {
-			// Rollback failed
-		}
-	}, [messages]);
 
 	const switchModel = useCallback(async (provider: string, modelId: string) => {
 		try {
@@ -543,10 +505,29 @@ export function useChatAgent() {
 					desc: "",
 				});
 			}
+			if (data.thinking) {
+				setThinking(data.thinking);
+			}
 		} catch {
 			// Model switch failed
 		}
 	}, []);
 
-	return { messages, status, send, stop, clear, rollback, currentModel, switchModel, usage };
+	const switchThinkingLevel = useCallback(async (level: string) => {
+		try {
+			const res = await fetch("/api/model", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ thinkingLevel: level }),
+			});
+			const data = await res.json();
+			if (data.thinking) {
+				setThinking(data.thinking);
+			}
+		} catch {
+			// Thinking switch failed
+		}
+	}, []);
+
+	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage };
 }

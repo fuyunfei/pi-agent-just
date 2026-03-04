@@ -3,7 +3,7 @@
  */
 
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { getOrCreateSingleton, getSessionId, getSessionStats, persistCurrentSnapshot } from "./singleton";
+import { getOrCreateSingleton, getSessionId, getSessionStats, getUserFiles } from "./singleton";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 		);
 	}
 
-	const { session, sessionManager, overlayFs, fsCheckpoints } = ctx;
+	const { session, sessionManager } = ctx;
 
 	// --- Stream SSE ---
 	const encoder = new TextEncoder();
@@ -60,7 +60,15 @@ export async function POST(req: Request) {
 			// Track tool call args for logging (toolcall_end has args, tool_execution_end does not)
 			const toolArgs = new Map<string, Record<string, unknown>>();
 
-			const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
+			let unsubscribe: () => void;
+
+			// Clean up subscription if client disconnects
+			req.signal?.addEventListener("abort", () => {
+				unsubscribe?.();
+				try { controller.close(); } catch { /* already closed */ }
+			});
+
+			unsubscribe = session.subscribe((event: AgentSessionEvent) => {
 				// Text streaming
 				if (
 					event.type === "message_update" &&
@@ -123,9 +131,7 @@ export async function POST(req: Request) {
 					const args = toolArgs.get(event.toolCallId) ?? {};
 					let detail = "";
 					if (tn === "write" || tn === "read" || tn === "edit") detail = ` path="${trunc(args.path ?? args.file_path, 60)}"`;
-					else if (tn === "bash") detail = ` cmd="${trunc(args.command, 60)}"`;
-					else if (tn === "grep") detail = ` pattern="${trunc(args.pattern, 40)}"`;
-					else if (tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
+					else if (tn === "grep" || tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
 					console.log(`[route] tool:${tn}${detail}`);
 				}
 
@@ -139,23 +145,11 @@ export async function POST(req: Request) {
 
 				// Agent finished
 				if (event.type === "agent_end") {
-					// Save FS checkpoint keyed by current leaf entry
-					const leafId = sessionManager.getLeafId();
-					if (leafId) {
-						fsCheckpoints.set(leafId, overlayFs.snapshot());
-					}
-					// Persist to /tmp so files survive cold starts
-					persistCurrentSnapshot(sid);
 					const usage = getSessionStats(sid);
+					const { changes, mountPoint } = getUserFiles(sid);
 
-					// Push file state so client doesn't need to poll GET /api/sandbox
-					const SYSTEM_PREFIXES = ["/bin/", "/usr/bin/", "/dev/", "/proc/", "/etc/", "/tmp/"];
-					const changes = overlayFs.getOverlayChanges()
-						.filter((c: { path: string }) => !SYSTEM_PREFIXES.some((p) => c.path.startsWith(p)));
-					const mountPoint = overlayFs.getMountPoint();
-
-					console.log(`[route] done entry=${leafId ?? "?"} tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
-					enqueue({ type: "finish", reason: "stop", entryId: leafId, usage, changes, mountPoint });
+					console.log(`[route] done tokens=${usage?.totalTokens ?? "?"} cost=$${usage?.cost?.toFixed(4) ?? "?"}`);
+					enqueue({ type: "finish", reason: "stop", usage, changes, mountPoint });
 					try {
 						controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 						controller.close();

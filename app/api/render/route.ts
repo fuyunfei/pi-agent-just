@@ -40,7 +40,10 @@ export async function POST(req: Request) {
 			: { code: body.code, durationInFrames: durationInFrames || 900, fps: fps || 30 };
 
 		const sceneCount = hasScenes ? body.scenes.length : 1;
-		console.log(`[render] start scenes=${sceneCount} duration=${durationInFrames} fps=${fps}`);
+		const totalFrames = durationInFrames || 900;
+		// Target ~100 lambdas for best speed/cost balance, hard cap at 200
+		const framesPerLambda = Math.max(20, Math.ceil(totalFrames / 100));
+		console.log(`[render] start scenes=${sceneCount} duration=${totalFrames} fps=${fps} framesPerLambda=${framesPerLambda}`);
 
 		const result = await renderMediaOnLambda({
 			codec: "h264",
@@ -53,7 +56,7 @@ export async function POST(req: Request) {
 			serveUrl: SITE_NAME,
 			composition: COMP_NAME,
 			inputProps,
-			framesPerLambda: 20,
+			framesPerLambda,
 			downloadBehavior: {
 				type: "download",
 				fileName: "animation.mp4",

@@ -1,17 +1,16 @@
 /**
- * Singleton module — OverlayFs + Bash + AgentSession persist across requests.
+ * Singleton module — OverlayFs + AgentSession persist across requests.
  * Uses a temporary empty directory as the overlay root (pure in-memory sandbox).
  */
 
-import { Bash, OverlayFs, type FsSnapshot } from "just-bash";
-import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { OverlayFs } from "just-bash";
+import { mkdtempSync } from "fs";
 import { join, relative } from "path";
 import { tmpdir } from "os";
 import { minimatch } from "minimatch";
 import {
 	AgentSession,
 	AuthStorage,
-	createBashTool,
 	createReadTool,
 	createWriteTool,
 	createEditTool,
@@ -22,7 +21,6 @@ import {
 	ModelRegistry,
 	SessionManager,
 	SettingsManager,
-	type BashOperations,
 	type ReadOperations,
 	type WriteOperations,
 	type EditOperations,
@@ -36,85 +34,35 @@ import { getModel } from "@mariozechner/pi-ai";
 // Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
-// ---------------------------------------------------------------------------
-// Persist / restore OverlayFs snapshot to /tmp so files survive cold starts
-// ---------------------------------------------------------------------------
-function snapshotPath(sessionId: string) {
-	return join(tmpdir(), `pi-sandbox-snapshot-${sessionId.slice(0, 8)}.json`);
-}
 
-interface SerializedEntry {
-	type: "file" | "directory";
-	content?: string; // base64 for files
-	mode: number;
-	mtime: string;
-}
+const SYSTEM_PROMPT = `You are an expert motion graphics engineer using remotion. 
+You help users create and edit motion graphics clips as .tsx files.
 
-function persistSnapshot(snap: FsSnapshot, sessionId: string) {
-	try {
-		const memory: Record<string, SerializedEntry> = {};
-		for (const [path, entry] of snap.memory) {
-			if (entry.type === "symlink") continue; // symlinks disabled in sandbox
-			const se: SerializedEntry = { type: entry.type, mode: entry.mode, mtime: entry.mtime.toISOString() };
-			if (entry.type === "file") se.content = Buffer.from(entry.content).toString("base64");
-			memory[path] = se;
-		}
-		writeFileSync(snapshotPath(sessionId), JSON.stringify({ memory, deleted: [...snap.deleted] }));
-	} catch { /* ignore write errors */ }
-}
+## Tools
 
-function loadPersistedSnapshot(sessionId: string): FsSnapshot | null {
-	try {
-		const raw = JSON.parse(readFileSync(snapshotPath(sessionId), "utf-8"));
-		const memory = new Map<string, import("just-bash").MemoryEntry>();
-		for (const [path, se] of Object.entries(raw.memory) as [string, SerializedEntry][]) {
-			if (se.type === "file") {
-				memory.set(path, { type: "file", content: Buffer.from(se.content!, "base64"), mode: se.mode, mtime: new Date(se.mtime) });
-			} else {
-				memory.set(path, { type: "directory", mode: se.mode, mtime: new Date(se.mtime) });
-			}
-		}
-		return { memory, deleted: new Set(raw.deleted || []) };
-	} catch {
-		return null;
-	}
-}
-
-const SYSTEM_PROMPT = `You are an expert motion graphics engineer. 
-You can chat and create animated videos using Remotion.
-
-## Available tools
-- read: Read file contents. Use this instead of cat or head.
-- write: Create new files or complete rewrites.
-- edit: Make surgical edits to files (old text must match exactly). Use for small changes instead of write.
-- bash: Execute bash commands (prefer dedicated tools for file work)
+Built-in:
+- read: Read file contents
+- edit: Make surgical edits to files (find exact text and replace)
+- write: Create or overwrite files
+- grep: Search file contents for patterns
 - ls: List directory contents
 - find: Find files by glob pattern
-- grep: Search file contents for patterns
-- No access to npm, node, pnpm, pip, or any package manager
 
-## Tool guidelines
-- Use read before editing — never edit blind
-- Use edit for precise changes, write for new files or full rewrites
-- Do NOT use bash (cat, sed, echo) for file operations — use the dedicated tools
-- Be concise — let the code speak for itself
 
-## Remotion overview
-- You create .tsx files for scenes. The preview panel auto-detects code importing from "remotion" and renders it with the built-in Remotion Player, Any main.tsx index.tsx for "composition" would render error. 
+## Code structure
+
+Each clip = one SELF-CONTAINED .tsx file. One file = one scene, ≈20 seconds.
+DO NOT create index.tsx, main.tsx, timeline.tsx, App.tsx, or any "composition" / "orchestration" files.
+DO NOT import between clip files. Each clip is independent — no shared state, no barrel exports.
+
+Name clips descriptively: intro.tsx, explosion.tsx, aftermath.tsx, etc.
+For longer content, split into multiple clips, for example:
+  intro.tsx (10s)
+  main-event.tsx (20s)
+  aftermath.tsx (15s)
+  conclusion.tsx (10s)
+
 - For long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director. 
-
-
-### Duration & multi-file scene design (CRITICAL)
-- Each .tsx file should be a **self-contained scene of 15–30 seconds** max. This is the sweet spot for visual quality.
-- For short requests (≤30s): create a single .tsx file.
-- For longer requests (>30s): split into **multiple scene files** — one per scene. Name them descriptively:
-  - \`scene-01-intro.tsx\` (15s)
-  - \`scene-02-main.tsx\` (20s)
-  - \`scene-03-outro.tsx\` (15s)
-- Within each file, use \`<Sequence>\` to sub-divide into segments with distinct animations.
-- Every animation must serve a purpose: reveal content, guide attention, or create rhythm. Never animate just to fill time.
-- Stillness is a tool — let text breathe and be readable. Constant motion feels cheap.
-- Maintain a consistent visual style (colors, fonts, layout) across all scene files.
 
 ### Config comment
 The FIRST line of the file MUST be:
@@ -245,39 +193,12 @@ Key patterns:
 
 ## Constraints
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
-- Do NOT create any "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
+- Do NOT create any main.tsx , index.tsx, for "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above`;
 
 // ---------------------------------------------------------------------------
-// just-bash → pi-coding-agent adapters
+// OverlayFs → pi-coding-agent adapters
 // ---------------------------------------------------------------------------
-
-function createJustBashOps(bashInstance: Bash): BashOperations {
-	return {
-		async exec(command, cwd, { onData, signal, timeout }) {
-			const execPromise = bashInstance.exec(command, { cwd });
-			let result: Awaited<ReturnType<typeof bashInstance.exec>>;
-			if (timeout && timeout > 0) {
-				const timeoutMs = timeout * 1000;
-				result = (await Promise.race([
-					execPromise,
-					new Promise((_, reject) =>
-						setTimeout(
-							() => reject(new Error(`timeout:${timeout}`)),
-							timeoutMs,
-						),
-					),
-				])) as typeof result;
-			} else {
-				result = await execPromise;
-			}
-			if (signal?.aborted) throw new Error("aborted");
-			if (result.stdout) onData(Buffer.from(result.stdout, "utf-8"));
-			if (result.stderr) onData(Buffer.from(result.stderr, "utf-8"));
-			return { exitCode: result.exitCode };
-		},
-	};
-}
 
 function createOverlayReadOps(fs: OverlayFs): ReadOperations {
 	return {
@@ -376,11 +297,13 @@ interface Singleton {
 	session: AgentSession;
 	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
-	fsCheckpoints: Map<string, FsSnapshot>;
 	lastAccess: number;
 }
 
-const sessions = new Map<string, Singleton>();
+// Persist across Next.js HMR — module-level Map gets wiped on hot reload
+const sessions: Map<string, Singleton> =
+	(globalThis as Record<string, unknown>).__piSessions as Map<string, Singleton>
+	?? ((globalThis as Record<string, unknown>).__piSessions = new Map<string, Singleton>());
 const MAX_SESSIONS = 10;
 const SESSION_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -410,30 +333,25 @@ export function getOrCreateSingleton(sessionId = "default") {
 	const existing = sessions.get(sessionId);
 	if (existing) {
 		existing.lastAccess = Date.now();
+		console.log(`[agent] reuse session=${sessionId.slice(0, 8)}`);
 		return existing;
 	}
+	console.log(`[agent] session=${sessionId.slice(0, 8)} NOT FOUND in memory (${sessions.size} active), creating new`);
 
 	evictSessions();
 
-	// --- Sandbox setup (writes allowed, stay in memory) ---
-	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
-
-	// Restore files from /tmp if this is a cold start
-	const persisted = loadPersistedSnapshot(sessionId);
-	if (persisted) {
-		overlayFs.restore(persisted);
-		console.log(`[agent] restored ${persisted.memory.size} files from /tmp`);
-	}
-
+	// OverlayFs serves as an in-memory filesystem — the "overlay" layer is unused
+	// since we mount on an empty tmpdir. We keep it because it implements the full
+	// FS API (readFile, writeFile, readdir, stat, etc.) needed by tool adapters.
+	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT, mountPoint: "/project" });
 	const mountPoint = overlayFs.getMountPoint();
-	const bash = new Bash({ fs: overlayFs, cwd: mountPoint });
 
 	// --- Pi-coding-agent setup ---
 	const provider = process.env.OPENROUTER_API_KEY
 		? "openrouter"
 		: "anthropic";
 	const apiKey =
-		process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || "";
+		(process.env.OPENROUTER_API_KEY || process.env.ANTHROPIC_API_KEY || "").trim();
 	const modelId = process.env.OPENROUTER_API_KEY
 		? (process.env.PI_MODEL || "google/gemini-3-flash-preview")
 		: (process.env.PI_MODEL || "claude-haiku-4-5-20251001");
@@ -450,7 +368,6 @@ export function getOrCreateSingleton(sessionId = "default") {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const sandboxedTools: Record<string, any> = {
-		bash: createBashTool(mountPoint, { operations: createJustBashOps(bash) }),
 		read: createReadTool(mountPoint, {
 			operations: createOverlayReadOps(overlayFs),
 		}),
@@ -520,11 +437,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const fsCheckpoints = new Map<string, FsSnapshot>();
-	// Store initial checkpoint before any turns
-	fsCheckpoints.set("initial", overlayFs.snapshot());
-
-	const entry: Singleton = { session, sessionManager, overlayFs, fsCheckpoints, lastAccess: Date.now() };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now() };
 	sessions.set(sessionId, entry);
 	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
 	return entry;
@@ -585,25 +498,26 @@ export async function compactSession(sessionId = "default") {
 	};
 }
 
-/** Persist current OverlayFs state to /tmp for cold-start recovery. */
-export function persistCurrentSnapshot(sessionId = "default") {
+/** Return user project files (only files under mountPoint, not system dirs). */
+export function getUserFiles(sessionId = "default") {
 	const s = sessions.get(sessionId);
-	if (!s) return;
-	persistSnapshot(s.overlayFs.snapshot(), sessionId);
+	if (!s) return { changes: [], mountPoint: "" };
+	const mountPoint = s.overlayFs.getMountPoint();
+	const prefix = mountPoint.endsWith("/") ? mountPoint : `${mountPoint}/`;
+	const changes = s.overlayFs.getOverlayChanges()
+		.filter((c) => c.path.startsWith(prefix));
+	return { changes, mountPoint };
 }
 
 /** Clear all state in-place — same instance, no orphan references. */
 export async function clearSingleton(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return;
-	const { session, overlayFs, fsCheckpoints } = s;
+	const { session, overlayFs } = s;
 	if (session.isStreaming) {
 		await session.abort();
 	}
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
 	await session.newSession();
-	fsCheckpoints.clear();
-	fsCheckpoints.set("initial", overlayFs.snapshot());
-	try { unlinkSync(snapshotPath(sessionId)); } catch { /* ignore if missing */ }
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }

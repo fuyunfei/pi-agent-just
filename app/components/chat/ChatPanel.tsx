@@ -38,7 +38,6 @@ import {
 	CheckCircle2Icon,
 	CheckIcon,
 	ChevronDownIcon,
-	ChevronRightIcon,
 	ClapperboardIcon,
 	FileEditIcon,
 	FileIcon,
@@ -46,7 +45,6 @@ import {
 	FilmIcon,
 	GraduationCapIcon,
 	HeartIcon,
-	HistoryIcon,
 	Loader2Icon,
 	MusicIcon,
 	PaperclipIcon,
@@ -63,26 +61,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useChatAgent } from "./useChatAgent";
 import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
-import type { ChatMessage, ModelInfo, ToolCall } from "./types";
+import type { ChatMessage, ModelInfo, ThinkingState, ToolCall } from "./types";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
-
-/* ------------------------------------------------------------------ */
-/*  Available models                                                    */
-/* ------------------------------------------------------------------ */
-
-const DEFAULT_MODEL: ModelInfo = { provider: "google", id: "gemini-3-flash-preview", label: "Gemini 3 Flash", desc: "Fast" };
-
-const AVAILABLE_MODELS: ModelInfo[] = [
-	DEFAULT_MODEL,
-	{ provider: "google", id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", desc: "Capable" },
-	{ provider: "google", id: "gemini-3.1-pro-preview-customtools", label: "Gemini 3.1 Pro CT", desc: "Custom tools" },
-	{ provider: "google", id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", desc: "Cheapest" },
-	{ provider: "anthropic", id: "claude-haiku-4.5", label: "Haiku 4.5", desc: "Fast" },
-	{ provider: "anthropic", id: "claude-opus-4.6", label: "Opus 4.6", desc: "Most capable" },
-	{ provider: "deepseek", id: "deepseek-v3.2", label: "DeepSeek V3.2", desc: "Cost effective" },
-	{ provider: "moonshotai", id: "kimi-k2.5", label: "Kimi K2.5", desc: "Moonshot" },
-	{ provider: "minimax", id: "minimax-m2.5", label: "MiniMax M2.5", desc: "MiniMax" },
-];
+import { BrainIcon } from "lucide-react";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/app/lib/models";
 
 /* ------------------------------------------------------------------ */
 /*  Tool call — compact inline card (V0-style)                        */
@@ -206,62 +188,64 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	};
 }
 
+/** Extract filename from tool args */
+function toolFilename(tool: ToolCall): string | null {
+	const path = String(tool.args.path || tool.args.file_path || "");
+	if (!path) return null;
+	return path.split("/").pop() || path;
+}
+
 const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
-	const [expanded, setExpanded] = useState(false);
 	const display = useMemo(() => toolDisplayInfo(tool), [tool]);
+	const filename = useMemo(() => toolFilename(tool), [tool]);
 
-	const stateIcon =
-		tool.state === "running" ? (
-			<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-		) : tool.state === "error" ? (
-			<XCircleIcon className="size-3.5 text-red-500" />
-		) : (
-			<CheckCircle2Icon className="size-3.5 text-emerald-500" />
-		);
+	// Can this card open a file?
+	const canOpen = tool.state === "completed" && !!filename;
 
-	const hasOutput = !!tool.output;
+	const handleClick = useCallback(() => {
+		if (!canOpen || !filename) return;
+		window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
+	}, [canOpen, filename]);
 
-	// Scene card — click to expand/collapse, action buttons for navigate/retry
+	const handleRetry = useCallback((e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!filename) return;
+		window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+			detail: { filename, error: tool.output },
+		}));
+	}, [filename, tool.output]);
+
+	const isError = tool.state === "error";
+	const isRunning = tool.state === "running";
+
+	// Scene card — larger, richer styling
 	if (display.isScene) {
-		const isReady = tool.state === "completed";
-		const isError = tool.state === "error";
-		const path = String(tool.args.path || tool.args.file_path || "");
-		const filename = path.split("/").pop() || path;
-
-		const handleOpen = (e: React.MouseEvent) => {
-			e.stopPropagation();
-			window.dispatchEvent(new CustomEvent("studio:open-scene", { detail: { filename } }));
-		};
-		const handleRetry = (e: React.MouseEvent) => {
-			e.stopPropagation();
-			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename, error: tool.output },
-			}));
-		};
-
 		return (
 			<div className="my-1.5">
 				<button
 					type="button"
-					onClick={() => hasOutput && setExpanded((v) => !v)}
+					onClick={handleClick}
+					disabled={!canOpen}
 					className={cn(
 						"flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs text-left transition-colors",
-						tool.state === "running"
+						isRunning
 							? "border-border/60 bg-muted/30 cursor-default"
 							: isError
 								? "border-red-500/20 bg-red-500/5 hover:bg-red-500/10 cursor-pointer"
-								: "border-border/60 bg-muted/40 hover:bg-accent/50 hover:border-border cursor-pointer",
+								: canOpen
+									? "border-border/60 bg-muted/40 hover:bg-accent/50 hover:border-border cursor-pointer"
+									: "border-border/60 bg-muted/40 cursor-default",
 					)}
 				>
 					<div className={cn(
 						"flex size-7 items-center justify-center rounded-lg flex-shrink-0 transition-colors",
-						tool.state === "running"
+						isRunning
 							? "bg-muted text-muted-foreground"
 							: isError
 								? "bg-red-500/10 text-red-500"
 								: "bg-foreground/5 text-foreground/70",
 					)}>
-						{tool.state === "running" ? (
+						{isRunning ? (
 							<Loader2Icon className="size-3.5 animate-spin" />
 						) : isError ? (
 							<XCircleIcon className="size-3.5" />
@@ -274,7 +258,7 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 							{display.label}
 						</div>
 						<div className="text-[10px] text-muted-foreground/60 mt-0.5">
-							{tool.state === "running"
+							{isRunning
 								? (display.isEdit ? "Updating scene..." : "Creating scene...")
 								: isError
 									? "Failed"
@@ -290,38 +274,31 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 							<RotateCcwIcon className="size-3.5" />
 						</span>
 					)}
-					{isReady && (
-						<span onClick={handleOpen} className="flex size-6 items-center justify-center rounded-md hover:bg-accent text-muted-foreground/40 hover:text-foreground/70 flex-shrink-0 transition-colors" title="Open in editor">
-							<ExternalLinkIcon className="size-3.5" />
-						</span>
-					)}
-					{hasOutput && (
-						<ChevronRightIcon className={cn("size-3.5 text-muted-foreground/40 flex-shrink-0 transition-transform", expanded && "rotate-90")} />
-					)}
 				</button>
-				{expanded && tool.output && (
-					<div className={cn(
-						"mt-1 max-h-48 overflow-auto rounded-lg border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground",
-						isError && "border-red-500/20 text-red-400",
-					)}>
-						<pre className="whitespace-pre-wrap break-all">{tool.output}</pre>
-					</div>
-				)}
 			</div>
 		);
 	}
 
-	// Default tool card
+	// Default tool card — click opens file if applicable
+	const stateIcon = isRunning ? (
+		<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+	) : isError ? (
+		<XCircleIcon className="size-3.5 text-red-500" />
+	) : (
+		<CheckCircle2Icon className="size-3.5 text-emerald-500" />
+	);
+
 	return (
 		<div className="my-1">
 			<button
 				type="button"
-				onClick={() => hasOutput && setExpanded((v) => !v)}
-				disabled={!hasOutput}
+				onClick={handleClick}
+				disabled={!canOpen}
 				className={cn(
 					"flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-					"bg-muted/40 hover:bg-muted/70",
-					!hasOutput && "cursor-default",
+					canOpen
+						? "bg-muted/40 hover:bg-muted/70 cursor-pointer"
+						: "bg-muted/40 cursor-default",
 				)}
 			>
 				{stateIcon}
@@ -329,80 +306,15 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 				<span className="min-w-0 flex-1 truncate font-mono text-foreground/80">
 					{display.label}
 				</span>
-				{hasOutput && (
-					<ChevronRightIcon
-						className={cn(
-							"size-3.5 text-muted-foreground transition-transform",
-							expanded && "rotate-90",
-						)}
-					/>
+				{canOpen && (
+					<ExternalLinkIcon className="size-3 text-muted-foreground/30" />
 				)}
 			</button>
-			{expanded && tool.output && (
-				<div
-					className={cn(
-						"mt-1 max-h-48 overflow-auto rounded-lg border bg-muted/30 px-3 py-2 font-mono text-xs text-muted-foreground",
-						tool.state === "error" && "border-red-500/20 text-red-400",
-					)}
-				>
-					<pre className="whitespace-pre-wrap break-all">{tool.output}</pre>
-				</div>
-			)}
 		</div>
 	);
 });
 
 /* ------------------------------------------------------------------ */
-/*  Checkpoint indicator between user messages                         */
-/* ------------------------------------------------------------------ */
-
-const CheckpointIndicator = memo(function CheckpointIndicator({
-	index,
-	onRollback,
-}: {
-	index: number;
-	onRollback: () => void;
-}) {
-	const [confirming, setConfirming] = useState(false);
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	const handleClick = useCallback(() => {
-		if (confirming) {
-			if (timerRef.current) clearTimeout(timerRef.current);
-			setConfirming(false);
-			onRollback();
-		} else {
-			setConfirming(true);
-			timerRef.current = setTimeout(() => setConfirming(false), 3000);
-		}
-	}, [confirming, onRollback]);
-
-	useEffect(() => () => {
-		if (timerRef.current) clearTimeout(timerRef.current);
-	}, []);
-
-	return (
-		<div className="group flex items-center gap-2 px-10 py-0.5">
-			<div className="h-px flex-1 bg-border/40" />
-			<button
-				type="button"
-				onClick={handleClick}
-				className={cn(
-					"flex items-center gap-1 rounded-full px-2 py-0.5",
-					"text-[10px] transition-all",
-					confirming
-						? "bg-destructive/10 text-destructive opacity-100"
-						: "text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground opacity-0 group-hover:opacity-100",
-				)}
-			>
-				<HistoryIcon className="size-2.5" />
-				<span>{confirming ? "Revert?" : `v${index + 1}`}</span>
-			</button>
-			<div className="h-px flex-1 bg-border/40" />
-		</div>
-	);
-});
-
 /* ------------------------------------------------------------------ */
 /*  Assistant message                                                  */
 /* ------------------------------------------------------------------ */
@@ -644,12 +556,62 @@ function ModelSelector({ models, current, onSwitch }: {
 	);
 }
 
+const THINKING_LABELS: Record<string, string> = {
+	off: "Off",
+	minimal: "Minimal",
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+	xhigh: "Max",
+};
+
+function ThinkingSelector({ thinking, onSwitch }: {
+	thinking: ThinkingState;
+	onSwitch: (level: string) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	if (!thinking.supported || thinking.available.length <= 1) return null;
+	const label = THINKING_LABELS[thinking.level] || thinking.level;
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<button
+					type="button"
+					className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+				>
+					<BrainIcon className="size-3 opacity-60" />
+					<span>{label}</span>
+					<ChevronDownIcon className="size-3 opacity-50" />
+				</button>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-36 p-1" sideOffset={8}>
+				{thinking.available.map((level) => (
+					<button
+						key={level}
+						type="button"
+						onClick={() => { onSwitch(level); setOpen(false); }}
+						className={cn(
+							"flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-left transition-colors",
+							level === thinking.level
+								? "bg-accent text-foreground font-medium"
+								: "text-muted-foreground hover:bg-accent/50",
+						)}
+					>
+						<CheckIcon className={cn("size-3 flex-shrink-0", level === thinking.level ? "text-emerald-500" : "invisible")} />
+						<span className="flex-1">{THINKING_LABELS[level] || level}</span>
+					</button>
+				))}
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 /* ------------------------------------------------------------------ */
 /*  ChatPanel                                                          */
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, rollback, currentModel, switchModel, usage } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -716,20 +678,6 @@ export function ChatPanel() {
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// Build checkpoint index: track which user messages have entryIds
-	const checkpointUserIndices = useMemo(() => {
-		const indices: Array<{ msgIndex: number; entryId: string; cpIndex: number }> = [];
-		let cpIdx = 0;
-		for (let i = 0; i < messages.length; i++) {
-			const m = messages[i];
-			if (m.role === "user" && m.entryId) {
-				indices.push({ msgIndex: i, entryId: m.entryId, cpIndex: cpIdx });
-				cpIdx++;
-			}
-		}
-		return indices;
-	}, [messages]);
-
 	return (
 		<div className="flex flex-col h-full bg-background">
 			<Conversation className="flex-1 relative chat-scroll">
@@ -765,21 +713,9 @@ export function ChatPanel() {
 						</div>
 					)}
 
-					{/* Messages with checkpoint indicators */}
-					{messages.map((msg, i) => {
-						// Check if a checkpoint indicator should appear before this message
-						const cp = checkpointUserIndices.find((c) => c.msgIndex === i);
-						const showCheckpoint = msg.role === "user" && cp && i > 0;
-
-						return (
-							<div key={msg.id}>
-								{showCheckpoint && (
-									<CheckpointIndicator
-										index={cp.cpIndex}
-										onRollback={() => rollback(cp.entryId)}
-									/>
-								)}
-								{msg.role === "system" ? (
+					{messages.map((msg) => (
+						<div key={msg.id}>
+							{msg.role === "system" ? (
 									<div className="flex justify-center px-10">
 										<pre className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-4 py-2 font-mono whitespace-pre-wrap max-w-full">
 											{msg.content}
@@ -793,8 +729,7 @@ export function ChatPanel() {
 									<AssistantMessage msg={msg} />
 								)}
 							</div>
-						);
-					})}
+					))}
 				</ConversationContent>
 				<ConversationScrollButton />
 				{/* Floating new session button — top left */}
@@ -850,6 +785,7 @@ export function ChatPanel() {
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
 							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} />
+							<ThinkingSelector thinking={thinking} onSwitch={switchThinkingLevel} />
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
