@@ -117,9 +117,32 @@ interface ToolDisplay {
 	sceneDuration?: string | null;
 }
 
+/** Friendly tool name for early display (before args arrive) */
+const TOOL_LABELS: Record<string, string> = {
+	write: "Writing…",
+	writeFile: "Writing…",
+	createFile: "Creating…",
+	edit: "Editing…",
+	editFile: "Editing…",
+	read: "Reading…",
+	readFile: "Reading…",
+	grep: "Searching…",
+	find: "Finding…",
+	ls: "Listing…",
+};
+
 function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	const name = tool.toolName;
 	const args = tool.args;
+	const hasArgs = Object.keys(args).length > 0;
+
+	// Early card — no args yet, show generic label
+	if (!hasArgs) {
+		return {
+			icon: <Loader2Icon className="size-3.5 animate-spin" />,
+			label: TOOL_LABELS[name] || name,
+		};
+	}
 
 	if (name === "bash" || name === "shell" || name === "execute") {
 		const cmd = String(args.command || args.cmd || "").split("\n")[0];
@@ -145,7 +168,7 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 
 		return {
 			icon: <FileEditIcon className="size-3.5" />,
-			label: short,
+			label: short || "Writing…",
 		};
 	}
 
@@ -164,7 +187,7 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 
 		return {
 			icon: <FileEditIcon className="size-3.5" />,
-			label: `edit ${short}`,
+			label: short ? `edit ${short}` : "Editing…",
 		};
 	}
 
@@ -173,7 +196,7 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		const short = path.split("/").pop() || path;
 		return {
 			icon: <FileIcon className="size-3.5" />,
-			label: short,
+			label: short || "Reading…",
 		};
 	}
 

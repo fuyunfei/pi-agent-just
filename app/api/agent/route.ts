@@ -88,7 +88,21 @@ export async function POST(req: Request) {
 					} else if (inner.type === "thinking_end") {
 						enqueue({ type: "reasoning-end" });
 					}
-					// Tool call streaming — args captured for logging
+					// Tool call streaming — create card early when model starts generating
+					else if (inner.type === "toolcall_start") {
+						const partial = inner.partial;
+						const tc = partial.content?.findLast(
+							(c: { type: string }) => c.type === "toolCall",
+						) as { id: string; name: string } | undefined;
+						if (tc) {
+							enqueue({
+								type: "tool-call-started",
+								toolCallId: tc.id,
+								toolName: tc.name,
+								input: {},
+							});
+						}
+					}
 					else if (inner.type === "toolcall_end") {
 						const tc = inner.toolCall;
 						toolArgs.set(tc.id, tc.arguments as Record<string, unknown>);
