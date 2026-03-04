@@ -313,6 +313,43 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 		);
 	}
 
+	// Image generation card — show thumbnail when completed
+	if (tool.toolName === "generate_image") {
+		const imageUrl = tool.details?.imageUrl as string | undefined;
+		return (
+			<div className="my-1.5">
+				<div className={cn(
+					"rounded-xl border overflow-hidden",
+					isRunning ? "border-border/60 bg-muted/30" : isError ? "border-red-500/20 bg-red-500/5" : "border-border/60 bg-muted/40",
+				)}>
+					<div className="flex items-center gap-2 px-3 py-2 text-xs">
+						{isRunning ? (
+							<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+						) : isError ? (
+							<XCircleIcon className="size-3.5 text-red-500" />
+						) : (
+							<CheckCircle2Icon className="size-3.5 text-emerald-500" />
+						)}
+						<ImageIcon className="size-3.5 text-muted-foreground" />
+						<span className="min-w-0 flex-1 truncate text-foreground/80">
+							{display.label}
+						</span>
+					</div>
+					{imageUrl && !isRunning && !isError && (
+						<div className="px-2 pb-2">
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img
+								src={imageUrl}
+								alt={String(tool.args.prompt || "")}
+								className="rounded-lg w-full max-h-48 object-cover"
+							/>
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	}
+
 	// Default tool card — click opens file if applicable
 	const stateIcon = isRunning ? (
 		<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />

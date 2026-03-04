@@ -199,9 +199,11 @@ function createImageGenTool(apiKey: string) {
 		async execute(
 			_toolCallId: string,
 			params: { prompt: string },
-		): Promise<AgentToolResult<unknown>> {
+			signal?: AbortSignal,
+		): Promise<AgentToolResult<{ imageUrl?: string }>> {
 			const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
 				method: "POST",
+				signal,
 				headers: {
 					"Authorization": `Bearer ${apiKey}`,
 					"Content-Type": "application/json",
@@ -231,7 +233,7 @@ function createImageGenTool(apiKey: string) {
 			console.log(`[image] generated id=${id} size=${(buf.length / 1024).toFixed(0)}KB`);
 			return {
 				content: [{ type: "text", text: `Image generated: ${url}` }],
-				details: {},
+				details: { imageUrl: url },
 			};
 		},
 	};

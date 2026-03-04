@@ -129,16 +129,21 @@ export async function POST(req: Request) {
 				if (event.type === "tool_execution_end") {
 					// Extract text content from pi's tool result format
 					let output: unknown = event.result;
+					let details: Record<string, unknown> | undefined;
 					if (event.result?.content) {
 						const textParts = event.result.content
 							.filter((c: { type: string }) => c.type === "text")
 							.map((c: { text: string }) => c.text);
 						output = textParts.join("");
+						if (event.result.details && typeof event.result.details === "object") {
+							details = event.result.details as Record<string, unknown>;
+						}
 					}
 					enqueue({
 						type: "tool-output-available",
 						toolCallId: event.toolCallId,
 						output,
+						...(details && { details }),
 					});
 					// Log tool execution
 					const tn = event.toolName ?? "?";
