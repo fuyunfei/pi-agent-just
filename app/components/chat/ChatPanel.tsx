@@ -546,7 +546,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 							: "text-muted-foreground hover:text-foreground hover:bg-accent/50 active:bg-accent/70",
 					)}
 				>
-					<span className="truncate max-w-[100px]">{active.label}</span>
+					<span className="truncate max-w-[160px]">{active.label}</span>
 					{thinkingOn && (
 						<span className="flex items-center gap-1 text-brand-clay/60">
 							<span className="text-[9px]">·</span>
@@ -580,7 +580,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 									? "bg-brand-moss shadow-[0_0_4px_var(--brand-moss)]"
 									: "bg-muted-foreground/15 group-hover/item:bg-muted-foreground/30",
 							)} />
-							<span className="flex-1 truncate">{m.label}</span>
+							<span className={cn("flex-1 truncate", selected && "text-brand-moss")}>{m.label}</span>
 							<span className={cn(
 								"text-[10px] transition-colors duration-150",
 								selected ? "text-muted-foreground/50" : "text-muted-foreground/25 group-hover/item:text-muted-foreground/45",
@@ -597,7 +597,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 								Thinking
 							</span>
 						</div>
-						<div className="mx-1.5 mb-1.5 flex rounded-lg bg-muted/50 p-0.5">
+						<div className="mx-1.5 mb-1.5 grid grid-cols-3 gap-0.5 rounded-lg bg-muted/50 p-0.5">
 							{thinking.available.map((level) => {
 								const selected = level === thinking.level;
 								return (
@@ -606,9 +606,9 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 										type="button"
 										onClick={() => onSwitchThinking(level)}
 										className={cn(
-											"flex-1 rounded-md py-1 text-[11px] text-center transition-all duration-150",
+											"rounded-md py-1.5 text-[11px] text-center transition-all duration-150",
 											selected
-												? "bg-background text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.15)]"
+												? "bg-background text-brand-clay shadow-[0_1px_3px_rgba(0,0,0,0.15)]"
 												: "text-muted-foreground/40 hover:text-muted-foreground active:text-foreground",
 										)}
 									>

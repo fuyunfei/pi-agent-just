@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
 import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, ThinkingState, ToolCall } from "./types";
+import { AVAILABLE_MODELS } from "@/app/lib/models";
 
 type UIMessage = {
 	id: string;
@@ -48,19 +49,11 @@ export function useChatAgent() {
 		});
 	}, []);
 
-	// Fetch current model + thinking on mount
+	// Fetch thinking state on mount (model defaults to AVAILABLE_MODELS[0])
 	useEffect(() => {
 		fetch("/api/model")
 			.then((r) => r.json())
 			.then((data) => {
-				if (data.current) {
-					setCurrentModel({
-						provider: data.current.provider,
-						id: data.current.id,
-						label: data.current.name || data.current.id,
-						desc: "",
-					});
-				}
 				if (data.thinking) {
 					setThinking(data.thinking);
 				}
@@ -490,6 +483,8 @@ export function useChatAgent() {
 	}, [clearChat]);
 
 	const switchModel = useCallback(async (provider: string, modelId: string) => {
+		const selected = AVAILABLE_MODELS.find((m) => m.id === modelId && m.provider === provider);
+		if (selected) setCurrentModel(selected);
 		try {
 			const res = await fetch("/api/model", {
 				method: "POST",
@@ -497,14 +492,6 @@ export function useChatAgent() {
 				body: JSON.stringify({ provider, modelId }),
 			});
 			const data = await res.json();
-			if (data.ok && data.model) {
-				setCurrentModel({
-					provider: data.model.provider,
-					id: data.model.id,
-					label: data.model.name || data.model.id,
-					desc: "",
-				});
-			}
 			if (data.thinking) {
 				setThinking(data.thinking);
 			}
