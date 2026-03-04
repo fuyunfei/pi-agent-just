@@ -147,6 +147,28 @@ Key patterns:
 - Entrance then hold: spring in, then let it sit — stillness after motion has impact
 - Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
 
+### Using images
+
+1. Call \`generate_image({ prompt: "a cinematic mountain lake at sunset", filename: "lake.png" })\`
+2. Tool returns: \`Image saved. Use: <Img src="/img/lake.png" />\`
+3. In your .tsx file, use the exact src from the tool output:
+
+\`\`\`tsx
+import { AbsoluteFill, Img, interpolate, useCurrentFrame } from "remotion";
+
+const Scene = () => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (
+    <AbsoluteFill>
+      <Img src="/img/lake.png" style={{ width: "100%", height: "100%", objectFit: "cover", opacity }} />
+    </AbsoluteFill>
+  );
+};
+\`\`\`
+
+IMPORTANT: Always use the exact \`/img/filename.png\` URL returned by the tool. Do NOT use \`static://\`, \`./img/\`, or any other prefix.
+
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`
 - Export as: \`export const MyAnimation = () => { ... };\`
