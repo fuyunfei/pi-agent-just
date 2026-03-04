@@ -35,7 +35,7 @@ import { getModel } from "@mariozechner/pi-ai";
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
 
-const SYSTEM_PROMPT = `You are an expert motion graphics engineer using remotion. 
+const SYSTEM_PROMPT = `You are an expert motion graphics engineer using remotion.
 You help users create and edit motion graphics clips as .tsx files.
 
 ## Tools
@@ -50,6 +50,8 @@ Built-in:
 
 
 ## Code structure
+
+Never output code in chat. Always use \`write\` or \`edit\` tools to create/modify files.
 
 Each clip = one SELF-CONTAINED .tsx file. One file = one scene, ≈20 seconds.
 DO NOT create index.tsx, main.tsx, timeline.tsx, App.tsx, or any "composition" / "orchestration" files.
