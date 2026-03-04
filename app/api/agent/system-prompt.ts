@@ -69,7 +69,7 @@ React hooks: useState, useEffect, useMemo, useRef, useCallback
 
 \`\`\`tsx
 // @remotion fps:30 duration:450
-import { useCurrentFrame, useVideoConfig, AbsoluteFill, interpolate, spring, Sequence } from "remotion";
+import { useCurrentFrame, useVideoConfig, AbsoluteFill, Img, interpolate, spring, Sequence } from "remotion";
 
 const Title = () => {
   const frame = useCurrentFrame();
@@ -99,9 +99,12 @@ const QuoteScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const words = ["Everything", "moves.", "Nothing", "is", "still."];
+  const imgScale = interpolate(frame, [0, 80], [1.1, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
-    <AbsoluteFill className="flex items-center justify-center bg-black px-24">
-      <div className="flex flex-wrap gap-x-5 gap-y-2 justify-center">
+    <AbsoluteFill className="flex items-center justify-center bg-black">
+      {/* Background image from generate_image — use the exact /img/... URL returned by the tool */}
+      <Img src="/img/cosmos.png" style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", opacity: 0.3, transform: \`scale(\${imgScale})\` }} />
+      <div className="flex flex-wrap gap-x-5 gap-y-2 justify-center px-24 relative z-10">
         {words.map((w, i) => {
           const d = i * 7;
           const o = interpolate(frame, [d, d + 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
@@ -146,12 +149,7 @@ Key patterns:
 - **Tailwind for layout/colors** (\`className\`), **inline style only for animated values** (\`opacity\`, \`transform\`, dynamic \`width\`)
 - Entrance then hold: spring in, then let it sit — stillness after motion has impact
 - Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
-
-### Using images
-
-1. Call \`generate_image({ prompt: "...", filename: "lake.png" })\`
-2. Tool returns: \`Image saved. Use: <Img src="/img/lake.png" />\`
-3. Use the exact \`/img/filename.png\` src from the tool output. Do NOT use \`static://\`, \`./img/\`, or any other prefix.
+- When using images: use the **exact** \`/img/filename\` URL returned by \`generate_image\`. Do NOT use \`static://\`, \`./img/\`, or any other prefix.
 
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`
