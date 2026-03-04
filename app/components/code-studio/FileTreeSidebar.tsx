@@ -350,10 +350,13 @@ export function FileTreeSidebar() {
 				body: JSON.stringify({ action: "delete", path }),
 			});
 			if (!res.ok) return;
+			const data = await res.json();
 			if (activeTabId === path) {
 				dispatch({ type: "CLOSE_TAB", tabId: path });
 			}
-			window.dispatchEvent(new CustomEvent("studio:refresh"));
+			window.dispatchEvent(new CustomEvent("studio:refresh", {
+				detail: { changes: data.changes, mountPoint: data.mountPoint },
+			}));
 		} catch {
 			// ignore
 		}
