@@ -99,18 +99,22 @@ const QuoteScene = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const words = ["Everything", "moves.", "Nothing", "is", "still."];
-  const imgScale = interpolate(frame, [0, 80], [1.1, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const imgReveal = spring({ frame: Math.max(0, frame - 40), fps, config: { damping: 18, stiffness: 80 } });
   return (
-    <AbsoluteFill className="flex items-center justify-center bg-black">
-      {/* Background image from generate_image — use the exact /img/... URL returned by the tool */}
-      <Img src="/img/cosmos.png" style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", opacity: 0.3, transform: \`scale(\${imgScale})\` }} />
-      <div className="flex flex-wrap gap-x-5 gap-y-2 justify-center px-24 relative z-10">
-        {words.map((w, i) => {
-          const d = i * 7;
-          const o = interpolate(frame, [d, d + 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-          const y = spring({ frame: Math.max(0, frame - d), fps, config: { damping: 16 } });
-          return <span key={i} className="text-5xl font-light text-white/90" style={{ fontFamily: "DM Sans, sans-serif", opacity: o, transform: \`translateY(\${(1 - y) * 25}px)\` }}>{w}</span>;
-        })}
+    <AbsoluteFill className="flex items-center justify-center bg-black px-24">
+      <div className="flex items-center gap-16">
+        {/* Image from generate_image — use the exact /img/... URL returned by the tool */}
+        <div style={{ width: 180, height: 180, borderRadius: "50%", overflow: "hidden", opacity: imgReveal, transform: \`scale(\${0.8 + imgReveal * 0.2})\` }}>
+          <Img src="/img/cosmos.png" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {words.map((w, i) => {
+            const d = i * 7;
+            const o = interpolate(frame, [d, d + 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            const y = spring({ frame: Math.max(0, frame - d), fps, config: { damping: 16 } });
+            return <span key={i} className="text-5xl font-light text-white/90" style={{ fontFamily: "DM Sans, sans-serif", opacity: o, transform: \`translateY(\${(1 - y) * 25}px)\` }}>{w}</span>;
+          })}
+        </div>
       </div>
     </AbsoluteFill>
   );
