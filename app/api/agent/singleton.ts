@@ -343,7 +343,7 @@ export function getOrCreateSingleton(sessionId = "default") {
 	// OverlayFs serves as an in-memory filesystem — the "overlay" layer is unused
 	// since we mount on an empty tmpdir. We keep it because it implements the full
 	// FS API (readFile, writeFile, readdir, stat, etc.) needed by tool adapters.
-	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT });
+	const overlayFs = new OverlayFs({ root: SANDBOX_ROOT, mountPoint: "/project" });
 	const mountPoint = overlayFs.getMountPoint();
 
 	// --- Pi-coding-agent setup ---
