@@ -181,7 +181,7 @@ function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: st
 	return {
 		name: "add_visual",
 		label: "Add Visual",
-		description: "Create an illustration, photo, or diagram as a foreground content element — NOT a background. Returns a URL for <Img src={url}>.",
+		description: "Create an illustration, photo, or diagram as a visual element. Returns a URL for <Img src={url}>.",
 		parameters: Type.Object({
 			prompt: Type.String({ description: "Describe the image to generate" }),
 			filename: Type.String({ description: "Filename for the image, e.g. 'hero.png'" }),
