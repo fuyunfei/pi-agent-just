@@ -1,90 +1,60 @@
 /**
- * Concat API — merge rendered clip MP4s into a single video.
+ * Concat API — merge rendered clip MP4s into a single video via Lambda.
  *
  * POST /api/render/concat
  *   { urls: string[], filename?: string }
- * Returns { type: "success", data: { url, size } } or streams the file directly.
+ * Returns { type: "success", data: { url, size } }
+ *
+ * The actual concat runs in the pi-concat Lambda (same region, S3 internal).
  */
 
-import { execFileSync } from "child_process";
-import { createReadStream, createWriteStream, writeFileSync, mkdirSync, rmSync, statSync } from "fs";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
-import { join } from "path";
-import { tmpdir } from "os";
-import { randomUUID } from "crypto";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { NextResponse } from "next/server";
 import { REGION } from "../../../../config.mjs";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const ffmpegPath = require("ffmpeg-static") as string;
+const FUNCTION_NAME = "pi-concat";
 
 interface ConcatRequest {
 	urls: string[];
 	filename?: string;
 }
 
+/**
+ * Parse an S3 URL into { bucket, key }.
+ * Supports:
+ *   https://bucket.s3.region.amazonaws.com/key
+ *   https://s3.region.amazonaws.com/bucket/key
+ */
+function parseS3Url(url: string): { bucket: string; key: string } {
+	const u = new URL(url);
+	const host = u.hostname;
+
+	// Virtual-hosted style: bucket.s3.region.amazonaws.com
+	const vhost = host.match(/^(.+?)\.s3[.-].*\.amazonaws\.com$/);
+	if (vhost) {
+		return { bucket: vhost[1], key: decodeURIComponent(u.pathname.slice(1)) };
+	}
+
+	// Path style: s3.region.amazonaws.com/bucket/key
+	const parts = u.pathname.slice(1).split("/");
+	return { bucket: parts[0], key: decodeURIComponent(parts.slice(1).join("/")) };
+}
+
 export async function POST(req: Request) {
 	const body = (await req.json()) as ConcatRequest;
-	const { urls, filename = "video.mp4" } = body;
+	const { urls } = body;
 
 	if (!urls || urls.length < 2) {
 		return NextResponse.json({ type: "error", message: "Need at least 2 URLs" }, { status: 400 });
 	}
 
-	const id = randomUUID().slice(0, 8);
-	const dir = join(tmpdir(), `concat-${id}`);
-	const listFile = join(dir, "list.txt");
-	const outputFile = join(dir, "output.mp4");
-
 	try {
-		mkdirSync(dir, { recursive: true });
+		// All clips are in the same bucket — extract bucket + keys
+		const parsed = urls.map(parseS3Url);
+		const bucket = parsed[0].bucket;
+		const keys = parsed.map((p) => p.key);
 
-		// Download all clips to /tmp
-		const localPaths: string[] = [];
-		for (let i = 0; i < urls.length; i++) {
-			const localPath = join(dir, `clip-${i}.mp4`);
-			const res = await fetch(urls[i]);
-			if (!res.ok || !res.body) throw new Error(`Failed to download clip ${i}: ${res.status}`);
-			const writer = createWriteStream(localPath);
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			await pipeline(Readable.fromWeb(res.body as any), writer);
-			localPaths.push(localPath);
-		}
-
-		// Write ffmpeg concat list
-		const listContent = localPaths.map((p) => `file '${p}'`).join("\n");
-		writeFileSync(listFile, listContent);
-
-		// Concat with -c copy (no re-encoding, very fast)
-		execFileSync(ffmpegPath, [
-			"-f", "concat", "-safe", "0",
-			"-i", listFile,
-			"-c", "copy",
-			"-movflags", "+faststart",
-			outputFile,
-		], { timeout: 60_000 });
-
-		const outputSize = statSync(outputFile).size;
-
-		// Upload to S3 (same bucket Remotion uses)
-		const bucketName = process.env.REMOTION_BUCKET_NAME;
-		if (!bucketName) {
-			// Fallback: read entire file into memory, then clean up
-			const { readFileSync } = await import("fs");
-			const buffer = readFileSync(outputFile);
-			rmSync(dir, { recursive: true, force: true });
-			return new NextResponse(buffer, {
-				headers: {
-					"Content-Type": "video/mp4",
-					"Content-Disposition": `attachment; filename="${filename}"`,
-					"Content-Length": outputSize.toString(),
-				},
-			});
-		}
-
-		const s3 = new S3Client({
+		const lambda = new LambdaClient({
 			region: REGION,
 			credentials: {
 				accessKeyId: process.env.REMOTION_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || "",
@@ -92,29 +62,28 @@ export async function POST(req: Request) {
 			},
 		});
 
-		const s3Key = `renders/concat-${id}.mp4`;
-		await s3.send(new PutObjectCommand({
-			Bucket: bucketName,
-			Key: s3Key,
-			Body: createReadStream(outputFile),
-			ContentType: "video/mp4",
-			ContentDisposition: `attachment; filename="${filename}"`,
-		}));
+		const res = await lambda.send(
+			new InvokeCommand({
+				FunctionName: FUNCTION_NAME,
+				Payload: Buffer.from(JSON.stringify({ bucket, keys })),
+			}),
+		);
 
-		const url = `https://${bucketName}.s3.${REGION}.amazonaws.com/${s3Key}`;
+		if (res.FunctionError) {
+			const errPayload = JSON.parse(new TextDecoder().decode(res.Payload));
+			throw new Error(errPayload.errorMessage || res.FunctionError);
+		}
+
+		const result = JSON.parse(new TextDecoder().decode(res.Payload));
 
 		return NextResponse.json({
 			type: "success",
-			data: { url, size: outputSize },
+			data: { url: result.url, size: result.size },
 		});
 	} catch (err) {
 		return NextResponse.json(
 			{ type: "error", message: (err as Error).message },
 			{ status: 500 },
 		);
-	} finally {
-		try {
-			rmSync(dir, { recursive: true, force: true });
-		} catch { /* ignore */ }
 	}
 }

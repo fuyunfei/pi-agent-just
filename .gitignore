@@ -43,3 +43,7 @@ next-env.d.ts
 
 # agent data (fetched at build time)
 /app/api/agent/_agent-data/
+
+# lambda deploy artifacts
+.concat-build/
+concat-deploy.zip
