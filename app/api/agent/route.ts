@@ -59,6 +59,8 @@ export async function POST(req: Request) {
 
 			// Track tool call args for logging (toolcall_end has args, tool_execution_end does not)
 			const toolArgs = new Map<string, Record<string, unknown>>();
+			// Guard: ignore agent_end from aborting the previous run
+			let promptStarted = false;
 
 			let unsubscribe: () => void;
 
@@ -163,7 +165,11 @@ export async function POST(req: Request) {
 					enqueue({ type: "compaction-end", aborted: event.aborted });
 				}
 
-				// Agent finished
+				// Agent finished — ignore if this is from aborting the previous run
+				if (event.type === "agent_end" && !promptStarted) {
+					console.log("[route] ignoring agent_end from previous abort");
+					return;
+				}
 				if (event.type === "agent_end") {
 					const usage = getSessionStats(sid);
 					const { changes, mountPoint } = getUserFiles(sid);
@@ -185,6 +191,7 @@ export async function POST(req: Request) {
 				if (session.isStreaming) {
 					await session.abort();
 				}
+				promptStarted = true;
 				const promptOpts = images?.length ? { images } : undefined;
 				return session.prompt(promptText, promptOpts);
 			};
