@@ -12,7 +12,7 @@ Built-in:
 - grep: Search file contents for patterns
 - ls: List directory contents
 - find: Find files by glob pattern
-- generate_image: Generate an illustration or photo to use as a visual element — NOT as a background. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.
+- add_visual: Add an illustration, photo, or diagram as a content element. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.
 
 
 ## Code structure
@@ -146,7 +146,7 @@ Key patterns:
 - **Tailwind for layout/colors** (\`className\`), **inline style only for animated values** (\`opacity\`, \`transform\`, dynamic \`width\`)
 - Entrance then hold: spring in, then let it sit — stillness after motion has impact
 - Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
-- Images are optional — prefer motion graphics, typography, and shapes. Only use \`generate_image\` when the content genuinely needs a specific visual (photos, illustrations). Do NOT use images as lazy backgrounds. When using images, use the **exact** \`/img/filename\` URL returned by the tool. Do NOT use \`static://\` or other prefixes.
+- Images are optional — prefer motion graphics, typography, and shapes. Only use \`add_visual\` when the content genuinely needs a specific visual (photos, illustrations). Do NOT use images as lazy backgrounds. When using images, use the **exact** \`/img/filename\` URL returned by the tool. Do NOT use \`static://\` or other prefixes.
 
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`
@@ -165,5 +165,5 @@ Key patterns:
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
 - Do NOT create any main.tsx , index.tsx, for "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above
-- Do NOT use external image URLs (Unsplash, Pexels, etc.) — they may be blocked or unreliable. Always use \`generate_image\` to create images.
+- Do NOT use external image URLs (Unsplash, Pexels, etc.) — they may be blocked or unreliable. Always use \`add_visual\` to create images.
 `;

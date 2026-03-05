@@ -151,7 +151,7 @@ export async function POST(req: Request) {
 					const tn = event.toolName ?? "?";
 					const args = toolArgs.get(event.toolCallId) ?? {};
 					let detail = "";
-					if (tn === "generate_image") detail = ` prompt="${trunc(args.prompt, 50)}"`;
+					if (tn === "add_visual") detail = ` prompt="${trunc(args.prompt, 50)}"`;
 					else if (tn === "write" || tn === "read" || tn === "edit") detail = ` path="${trunc(args.path ?? args.file_path, 60)}"`;
 					else if (tn === "grep" || tn === "find") detail = ` pattern="${trunc(args.pattern, 40)}"`;
 					console.log(`[route] tool:${tn}${detail}`);

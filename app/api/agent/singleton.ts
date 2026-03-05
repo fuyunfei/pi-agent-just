@@ -179,9 +179,9 @@ const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
 function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: string) {
 	return {
-		name: "generate_image",
-		label: "Generate Image",
-		description: "Generate an illustration or photo for use as a visual element (not a background). Returns a URL for <Img src={url}>.",
+		name: "add_visual",
+		label: "Add Visual",
+		description: "Create an illustration, photo, or diagram as a foreground content element — NOT a background. Returns a URL for <Img src={url}>.",
 		parameters: Type.Object({
 			prompt: Type.String({ description: "Describe the image to generate" }),
 			filename: Type.String({ description: "Filename for the image, e.g. 'hero.png'" }),

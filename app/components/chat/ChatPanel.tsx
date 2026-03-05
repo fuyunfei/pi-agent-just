@@ -130,7 +130,7 @@ const TOOL_LABELS: Record<string, string> = {
 	grep: "Searching…",
 	find: "Finding…",
 	ls: "Listing…",
-	generate_image: "Generating image…",
+	add_visual: "Generating image…",
 };
 
 function toolDisplayInfo(tool: ToolCall): ToolDisplay {
@@ -202,7 +202,7 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		};
 	}
 
-	if (name === "generate_image") {
+	if (name === "add_visual") {
 		const prompt = String(args.prompt || "");
 		const short = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
 		return {
@@ -409,7 +409,7 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 	}
 
 	// Image generation card — rendered by ImageToolCard below
-	if (tool.toolName === "generate_image") {
+	if (tool.toolName === "add_visual") {
 		return <ImageToolCard tool={tool} display={display} compact={false} />;
 	}
 
@@ -494,12 +494,12 @@ const AssistantMessage = memo(function AssistantMessage({
 					let i = 0;
 					while (i < msg.parts.length) {
 						const part = msg.parts[i];
-						if (part.type === "tool" && part.tool.toolName === "generate_image") {
+						if (part.type === "tool" && part.tool.toolName === "add_visual") {
 							// Collect consecutive image tools
 							const group: ToolCall[] = [];
 							while (i < msg.parts.length) {
 								const p = msg.parts[i];
-								if (p.type === "tool" && p.tool.toolName === "generate_image") {
+								if (p.type === "tool" && p.tool.toolName === "add_visual") {
 									group.push(p.tool);
 									i++;
 								} else break;
