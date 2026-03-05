@@ -140,6 +140,7 @@ interface Singleton {
 	sessionManager: SessionManager;
 	overlayFs: OverlayFs;
 	lastAccess: number;
+	skillsEnabled: boolean;
 }
 
 // Persist across Next.js HMR — module-level Map gets wiped on hot reload
@@ -313,6 +314,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 
 	// Load bundled skills into OverlayFs (e.g. remotion best practices)
 	const skills = await loadBundledSkills(overlayFs, mountPoint);
+	const skillState = { enabled: false };
 
 	const resourceLoader = {
 		getExtensions: () => ({
@@ -320,7 +322,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 			errors: [],
 			runtime: createExtensionRuntime(),
 		}),
-		getSkills: () => ({ skills, diagnostics: [] }),
+		getSkills: () => ({ skills: skillState.enabled ? skills : [], diagnostics: [] }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
@@ -343,7 +345,13 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now() };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false };
+	// Wire skillState to entry so toggleSkills can flip it
+	Object.defineProperty(entry, "skillsEnabled", {
+		get: () => skillState.enabled,
+		set: (v: boolean) => { skillState.enabled = v; },
+		enumerable: true,
+	});
 	sessions.set(sessionId, entry);
 	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
 	return entry;
@@ -359,6 +367,21 @@ export function getAvailableSkills(sessionId = "default") {
 		description: sk.description,
 		filePath: sk.filePath,
 	}));
+}
+
+/** Toggle skills on/off globally for a session. Returns new state. */
+export function toggleSkills(sessionId = "default"): boolean {
+	const s = sessions.get(sessionId);
+	if (!s) return false;
+	s.skillsEnabled = !s.skillsEnabled;
+	console.log(`[agent] skills ${s.skillsEnabled ? "enabled" : "disabled"} session=${sessionId.slice(0, 8)}`);
+	return s.skillsEnabled;
+}
+
+/** Check if skills are enabled for a session. */
+export function isSkillsEnabled(sessionId = "default"): boolean {
+	const s = sessions.get(sessionId);
+	return s?.skillsEnabled ?? false;
 }
 
 /** Return aggregated session stats + context usage (minimal, for footer). */

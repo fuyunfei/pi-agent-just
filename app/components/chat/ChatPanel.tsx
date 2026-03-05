@@ -715,12 +715,15 @@ const THINKING_LABELS: Record<string, string> = {
 	xhigh: "Max",
 };
 
-function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }: {
+function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, skillsEnabled, onToggleSkills, skillCount }: {
 	models: ModelInfo[];
 	current: ModelInfo | null;
 	onSwitch: (provider: string, id: string) => void;
 	thinking: ThinkingState;
 	onSwitchThinking: (level: string) => void;
+	skillsEnabled: boolean;
+	onToggleSkills: () => void;
+	skillCount: number;
 }) {
 	const [open, setOpen] = useState(false);
 	const active = current || DEFAULT_MODEL;
@@ -745,6 +748,12 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 						<span className="flex items-center gap-1 text-brand-clay/60">
 							<span className="text-[9px]">·</span>
 							<BrainIcon className="size-3" />
+						</span>
+					)}
+					{skillsEnabled && (
+						<span className="flex items-center gap-1 text-brand-clay/60">
+							<span className="text-[9px]">·</span>
+							<BookOpenIcon className="size-3" />
 						</span>
 					)}
 					<ChevronDownIcon className={cn(
@@ -813,6 +822,27 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 						</div>
 					</>
 				)}
+				{skillCount > 0 && (
+					<>
+						<div className="mx-2.5 my-1 border-t border-border/20" />
+						<button
+							type="button"
+							onClick={onToggleSkills}
+							className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-left transition-all duration-150 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+						>
+							<BookOpenIcon className="size-3 flex-shrink-0" />
+							<span className="flex-1">Skills</span>
+							<span className={cn(
+								"text-[10px] px-1.5 py-0.5 rounded-full transition-all duration-150",
+								skillsEnabled
+									? "bg-brand-moss/15 text-brand-moss"
+									: "bg-muted text-muted-foreground/40",
+							)}>
+								{skillsEnabled ? "on" : "off"}
+							</span>
+						</button>
+					</>
+				)}
 			</PopoverContent>
 		</Popover>
 	);
@@ -823,7 +853,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -1031,7 +1061,7 @@ export function ChatPanel() {
 							>
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
-							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} />
+							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} skillsEnabled={skillsEnabled} onToggleSkills={toggleSkillsEnabled} skillCount={skills.length} />
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">

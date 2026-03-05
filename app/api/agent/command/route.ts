@@ -1,4 +1,4 @@
-import { compactSession, getFullSessionStats, getAvailableSkills, getOrCreateSingleton, getSessionId } from "../singleton";
+import { compactSession, getFullSessionStats, getAvailableSkills, getOrCreateSingleton, getSessionId, toggleSkills, isSkillsEnabled } from "../singleton";
 
 export async function POST(req: Request) {
 	const sid = getSessionId(req);
@@ -27,7 +27,14 @@ export async function POST(req: Request) {
 	if (command === "skills") {
 		await getOrCreateSingleton(sid); // ensure session exists so skills are loaded
 		const skills = getAvailableSkills(sid);
-		return Response.json({ ok: true, command: "skills", skills });
+		const enabled = isSkillsEnabled(sid);
+		return Response.json({ ok: true, command: "skills", skills, enabled });
+	}
+
+	if (command === "toggle-skills") {
+		await getOrCreateSingleton(sid);
+		const enabled = toggleSkills(sid);
+		return Response.json({ ok: true, command: "toggle-skills", enabled });
 	}
 
 	return Response.json({ ok: false, error: `Unknown command: ${command}` }, { status: 400 });

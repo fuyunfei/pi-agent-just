@@ -28,6 +28,7 @@ export function useChatAgent() {
 	const [thinking, setThinking] = useState<ThinkingState>({ level: "medium", available: [], supported: false });
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const [skills, setSkills] = useState<SkillInfo[]>([]);
+	const [skillsEnabled, setSkillsEnabled] = useState(false);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
 
@@ -71,7 +72,10 @@ export function useChatAgent() {
 		})
 			.then((r) => r.json())
 			.then((data) => {
-				if (data.ok && data.skills) setSkills(data.skills);
+				if (data.ok && data.skills) {
+					setSkills(data.skills);
+					if (typeof data.enabled === "boolean") setSkillsEnabled(data.enabled);
+				}
 			})
 			.catch(() => {});
 	}, []);
@@ -571,5 +575,19 @@ export function useChatAgent() {
 		}
 	}, []);
 
-	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills };
+	const toggleSkillsEnabled = useCallback(async () => {
+		try {
+			const res = await fetch("/api/agent/command", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ command: "toggle-skills" }),
+			});
+			const data = await res.json();
+			if (data.ok) setSkillsEnabled(data.enabled);
+		} catch {
+			// Toggle failed
+		}
+	}, []);
+
+	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled };
 }
