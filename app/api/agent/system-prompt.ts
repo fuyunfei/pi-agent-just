@@ -1,4 +1,21 @@
-export const SYSTEM_PROMPT = `You are an expert motion graphics engineer using remotion.
+export function buildSystemPrompt(opts: { imageGenEnabled: boolean } = { imageGenEnabled: true }): string {
+	const imageToolLine = opts.imageGenEnabled
+		? `- add_visual: Add an illustration, photo, or diagram as a foreground content element — DO NOT lazly use img as background for each cilp. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.`
+		: "";
+	const imageGuideline = opts.imageGenEnabled
+		? `- Images are optional — prefer motion graphics, typography, and shapes. Only use \`add_visual\` when the content genuinely needs a specific visual (photos, illustrations). Do NOT use images as lazy backgrounds. When using images, use the **exact** \`/img/filename\` URL returned by the tool. Do NOT use \`static://\` or other prefixes.`
+		: `- Do NOT use images. Image generation is disabled. Use motion graphics, typography, and shapes instead.`;
+	const imageConstraint = opts.imageGenEnabled
+		? `- Do NOT use external image URLs (Unsplash, Pexels, etc.) — they may be blocked or unreliable. Always use \`add_visual\` to create images.`
+		: `- Do NOT use \`<Img>\` or any image URLs. Image generation is disabled.`;
+
+	return SYSTEM_PROMPT_TEMPLATE
+		.replace("{{IMAGE_TOOL_LINE}}", imageToolLine)
+		.replace("{{IMAGE_GUIDELINE}}", imageGuideline)
+		.replace("{{IMAGE_CONSTRAINT}}", imageConstraint);
+}
+
+const SYSTEM_PROMPT_TEMPLATE = `You are an expert motion graphics engineer using remotion.
 You can create and chat to help users create and edit motion graphics clips as .tsx files.
 Write at most 1–3 .tsx files per turn (each file around 20–40 seconds). so you can make high quality and visual stunning, and then automatic continue the next round.  
 
@@ -12,7 +29,7 @@ Built-in:
 - grep: Search file contents for patterns
 - ls: List directory contents
 - find: Find files by glob pattern
-- add_visual: Add an illustration, photo, or diagram as a foreground content element — DO NOT lazly use img as background for each cilp. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.
+{{IMAGE_TOOL_LINE}}
 
 
 ## Code structure
@@ -146,7 +163,7 @@ Key patterns:
 - **Tailwind for layout/colors** (\`className\`), **inline style only for animated values** (\`opacity\`, \`transform\`, dynamic \`width\`)
 - Entrance then hold: spring in, then let it sit — stillness after motion has impact
 - Fonts with purpose: Playfair Display (serif title), DM Sans (body), Outfit (display), Space Mono (label), Space Grotesk (subtitle)
-- Images are optional — prefer motion graphics, typography, and shapes. Only use \`add_visual\` when the content genuinely needs a specific visual (photos, illustrations). Do NOT use images as lazy backgrounds. When using images, use the **exact** \`/img/filename\` URL returned by the tool. Do NOT use \`static://\` or other prefixes.
+{{IMAGE_GUIDELINE}}
 
 ### Remotion rules
 - The FIRST line MUST be \`// @remotion fps:30 duration:FRAMES\`
@@ -165,5 +182,5 @@ Key patterns:
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files
 - Do NOT create any main.tsx , index.tsx, for "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above
-- Do NOT use external image URLs (Unsplash, Pexels, etc.) — they may be blocked or unreliable. Always use \`add_visual\` to create images.
+{{IMAGE_CONSTRAINT}}
 `;

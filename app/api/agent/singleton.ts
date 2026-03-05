@@ -35,7 +35,7 @@ import { Type } from "@sinclair/typebox";
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
 
-import { SYSTEM_PROMPT } from "./system-prompt";
+import { buildSystemPrompt } from "./system-prompt";
 import { loadBundledSkills } from "./skills-loader";
 
 // ---------------------------------------------------------------------------
@@ -338,7 +338,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
-		getSystemPrompt: () => SYSTEM_PROMPT,
+		getSystemPrompt: () => buildSystemPrompt({ imageGenEnabled: imageState.enabled }),
 		getAppendSystemPrompt: () => [],
 		getPathMetadata: () => new Map(),
 		extendResources: () => {},

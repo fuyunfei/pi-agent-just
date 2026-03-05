@@ -24,18 +24,27 @@ const EXT_TO_MIME: Record<string, string> = {
 	".gif": "image/gif",
 };
 
+// 1x1 transparent PNG fallback — prevents Lambda crash when image is missing
+const TRANSPARENT_1PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualzQAAAABJRU5ErkJggg==";
+
 /** Replace /img/... URLs with inline data URIs so Lambda can render them. */
 async function inlineImages(code: string, overlayFs: OverlayFs): Promise<string> {
 	const mountPoint = overlayFs.getMountPoint();
+	// Deduplicate matches — same path may appear multiple times
+	const seen = new Set<string>();
 	const matches: { full: string; relativePath: string }[] = [];
 	code.replace(/\/?(img\/.+?\.(png|jpe?g|webp|gif))/g, (full, relativePath) => {
-		matches.push({ full, relativePath });
+		if (!seen.has(full)) {
+			seen.add(full);
+			matches.push({ full, relativePath });
+		}
 		return full;
 	});
 	console.log(`[render] inlineImages: found ${matches.length} image refs:`, matches.map(m => m.full));
 	if (matches.length === 0) return code;
 
 	let result = code;
+	const failed: string[] = [];
 	for (const m of matches) {
 		const filePath = `${mountPoint}/${m.relativePath}`;
 		try {
@@ -47,7 +56,13 @@ async function inlineImages(code: string, overlayFs: OverlayFs): Promise<string>
 			console.log(`[render] inlined ${m.relativePath} (${(data.length / 1024).toFixed(0)}KB)`);
 		} catch (err) {
 			console.warn(`[render] failed to inline ${m.relativePath} from ${filePath}:`, err);
+			// Replace with transparent pixel so Lambda doesn't crash on missing image
+			result = result.replaceAll(m.full, TRANSPARENT_1PX);
+			failed.push(m.relativePath);
 		}
+	}
+	if (failed.length > 0) {
+		console.warn(`[render] ${failed.length} image(s) missing, replaced with transparent fallback: ${failed.join(", ")}`);
 	}
 	return result;
 }
@@ -65,7 +80,7 @@ export async function POST(req: Request) {
 			return Response.json({ error: "Missing code or scenes" }, { status: 400 });
 		}
 
-		if (!process.env.AWS_ACCESS_KEY_ID && !process.env.REMOTION_AWS_ACCESS_KEY_ID) {
+		if (!process.env.AWS_ACCESS_KEY_ID) {
 			return Response.json(
 				{ error: "Lambda not configured. Set AWS credentials and run: node deploy.mjs" },
 				{ status: 500 },
