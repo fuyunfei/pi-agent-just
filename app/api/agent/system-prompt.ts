@@ -12,7 +12,7 @@ Built-in:
 - grep: Search file contents for patterns
 - ls: List directory contents
 - find: Find files by glob pattern
-- add_visual: Add an illustration, photo, or diagram as a content element. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.
+- add_visual: Add an illustration, photo, or diagram as a foreground content element — DO NOT lazly use img as background for each cilp. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.
 
 
 ## Code structure
