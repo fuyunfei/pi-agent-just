@@ -29,7 +29,7 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const [skills, setSkills] = useState<SkillInfo[]>([]);
 	const [skillsEnabled, setSkillsEnabled] = useState(false);
-	const [imageGenEnabled, setImageGenEnabled] = useState(true);
+	const [imageGenEnabled, setImageGenEnabled] = useState(false);
 	const [imageModel, setImageModelState] = useState("");
 	const [imageModels, setImageModels] = useState<ImageModelInfo[]>([]);
 	const historyRef = useRef<UIMessage[]>([]);

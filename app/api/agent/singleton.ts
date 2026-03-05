@@ -279,7 +279,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 	authStorage.setRuntimeApiKey(provider, apiKey);
 	const modelRegistry = new ModelRegistry(authStorage);
 
-	const imageState = { enabled: true, model: IMAGE_MODELS[0].id };
+	const imageState = { enabled: false, model: IMAGE_MODELS[0].id };
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const sandboxedTools: Record<string, any> = {
@@ -357,7 +357,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: true, imageModel: imageState.model };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: false, imageModel: imageState.model };
 	// Wire skillState to entry so toggleSkills can flip it
 	Object.defineProperty(entry, "skillsEnabled", {
 		get: () => skillState.enabled,
@@ -419,7 +419,7 @@ export function toggleImageGen(sessionId = "default"): boolean {
 /** Check if image gen is enabled for a session. */
 export function isImageGenEnabled(sessionId = "default"): boolean {
 	const s = sessions.get(sessionId);
-	return s?.imageGenEnabled ?? true;
+	return s?.imageGenEnabled ?? false;
 }
 
 /** Set the image model for a session. */
