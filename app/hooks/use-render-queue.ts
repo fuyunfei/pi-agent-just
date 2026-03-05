@@ -233,7 +233,10 @@ export function useRenderQueue() {
 			if (urls.length !== jobs.length) return;
 
 			setConcatError(null);
-			setConcatUrl(null);
+			setConcatUrl((prev) => {
+				if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+				return null;
+			});
 			setIsConcatting(true);
 			try {
 				const res = await fetch("/api/render/concat", {
