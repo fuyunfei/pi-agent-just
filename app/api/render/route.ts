@@ -75,7 +75,7 @@ export async function POST(req: Request) {
 		// Get OverlayFs for this session to inline image URLs as data URIs
 		const sessionId = getSessionId(req);
 		console.log(`[render] session=${sessionId.slice(0, 8)}`);
-		const { overlayFs } = getOrCreateSingleton(sessionId);
+		const { overlayFs } = await getOrCreateSingleton(sessionId);
 		const mp = overlayFs.getMountPoint();
 		try {
 			const imgFiles = await overlayFs.readdir(`${mp}/img`);

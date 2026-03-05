@@ -13,7 +13,7 @@ const MIME_TYPES: Record<string, string> = {
 export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
 	const { path } = await params;
 	const sessionId = getSessionId(req);
-	const { overlayFs } = getOrCreateSingleton(sessionId);
+	const { overlayFs } = await getOrCreateSingleton(sessionId);
 	const mountPoint = overlayFs.getMountPoint();
 	const filePath = `${mountPoint}/img/${path.join("/")}`;
 

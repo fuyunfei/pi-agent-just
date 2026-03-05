@@ -34,6 +34,12 @@ export interface SessionUsage {
 	contextPercent: number | null;
 }
 
+export interface SkillInfo {
+	name: string;
+	description: string;
+	filePath: string;
+}
+
 export interface ThinkingState {
 	level: string;
 	available: string[];

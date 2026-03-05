@@ -36,6 +36,7 @@ const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
 
 
 import { SYSTEM_PROMPT } from "./system-prompt";
+import { loadBundledSkills } from "./skills-loader";
 
 // ---------------------------------------------------------------------------
 // OverlayFs → pi-coding-agent adapters
@@ -230,7 +231,7 @@ function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: st
 	};
 }
 
-export function getOrCreateSingleton(sessionId = "default") {
+export async function getOrCreateSingleton(sessionId = "default") {
 	const existing = sessions.get(sessionId);
 	if (existing) {
 		existing.lastAccess = Date.now();
@@ -310,13 +311,16 @@ export function getOrCreateSingleton(sessionId = "default") {
 	sessionManager.appendModelChange(model.provider, model.id);
 	sessionManager.appendThinkingLevelChange("medium");
 
+	// Load bundled skills into OverlayFs (e.g. remotion best practices)
+	const skills = await loadBundledSkills(overlayFs, mountPoint);
+
 	const resourceLoader = {
 		getExtensions: () => ({
 			extensions: [],
 			errors: [],
 			runtime: createExtensionRuntime(),
 		}),
-		getSkills: () => ({ skills: [], diagnostics: [] }),
+		getSkills: () => ({ skills, diagnostics: [] }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
@@ -343,6 +347,18 @@ export function getOrCreateSingleton(sessionId = "default") {
 	sessions.set(sessionId, entry);
 	console.log(`[agent] init session=${sessionId.slice(0, 8)} model=${modelId} (${sessions.size} active)`);
 	return entry;
+}
+
+/** Return available skills for this session. */
+export function getAvailableSkills(sessionId = "default") {
+	const s = sessions.get(sessionId);
+	if (!s) return [];
+	const { skills } = s.session.resourceLoader.getSkills();
+	return skills.map((sk) => ({
+		name: sk.name,
+		description: sk.description,
+		filePath: sk.filePath,
+	}));
 }
 
 /** Return aggregated session stats + context usage (minimal, for footer). */
@@ -406,8 +422,9 @@ export function getUserFiles(sessionId = "default") {
 	if (!s) return { changes: [], mountPoint: "" };
 	const mountPoint = s.overlayFs.getMountPoint();
 	const prefix = mountPoint.endsWith("/") ? mountPoint : `${mountPoint}/`;
+	const skillsPrefix = `${prefix}skills/`;
 	const changes = s.overlayFs.getOverlayChanges()
-		.filter((c) => c.path.startsWith(prefix));
+		.filter((c) => c.path.startsWith(prefix) && !c.path.startsWith(skillsPrefix));
 	return { changes, mountPoint };
 }
 
@@ -420,6 +437,9 @@ export async function clearSingleton(sessionId = "default") {
 		await session.abort();
 	}
 	overlayFs.restore({ memory: new Map(), deleted: new Set() });
+	// Re-load skills into OverlayFs (restore wiped them)
+	const mountPoint = overlayFs.getMountPoint();
+	await loadBundledSkills(overlayFs, mountPoint);
 	await session.newSession();
 	console.log(`[agent] cleared session=${sessionId.slice(0, 8)}`);
 }

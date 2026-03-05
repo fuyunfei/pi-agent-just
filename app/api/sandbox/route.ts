@@ -11,7 +11,7 @@ export async function GET(req: Request) {
 	try {
 		const sid = getSessionId(req);
 		// Ensure session exists (creates if needed), then read user files
-		getOrCreateSingleton(sid);
+		await getOrCreateSingleton(sid);
 		const { changes, mountPoint } = getUserFiles(sid);
 		console.log(`[sandbox] GET sid=${sid.slice(0, 8)} → ${changes.length} files`);
 		return Response.json({ changes, mountPoint });
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 			if (!path || typeof path !== "string") {
 				return Response.json({ error: "Missing path" }, { status: 400 });
 			}
-			const { overlayFs } = getOrCreateSingleton(sid);
+			const { overlayFs } = await getOrCreateSingleton(sid);
 			await overlayFs.rm(path);
 			console.log(`[sandbox] delete ${path}`);
 			const { changes, mountPoint } = getUserFiles(sid);

@@ -9,7 +9,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import { getOrCreateSingleton, getSessionId } from "../agent/singleton";
 import { AVAILABLE_MODELS } from "@/app/lib/models";
 
-function getThinkingState(session: ReturnType<typeof getOrCreateSingleton>["session"]) {
+function getThinkingState(session: Awaited<ReturnType<typeof getOrCreateSingleton>>["session"]) {
 	return {
 		level: session.thinkingLevel,
 		available: session.getAvailableThinkingLevels(),
@@ -20,7 +20,7 @@ function getThinkingState(session: ReturnType<typeof getOrCreateSingleton>["sess
 export async function GET(req: Request) {
 	try {
 		const sid = getSessionId(req);
-		const { session } = getOrCreateSingleton(sid);
+		const { session } = await getOrCreateSingleton(sid);
 		const model = session.model;
 		return Response.json({
 			current: model
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 		const { provider, modelId, thinkingLevel } = body;
 
 		const sid = getSessionId(req);
-		const { session } = getOrCreateSingleton(sid);
+		const { session } = await getOrCreateSingleton(sid);
 
 		// Switch model if requested
 		if (provider && modelId) {

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Play, SearchIcon, Trash2 } from "lucide-react";
+import { BookOpen, Play, SearchIcon, Trash2 } from "lucide-react";
+import type { SkillInfo } from "../chat/types";
 import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { FileTreeNode } from "./FileTreeNode";
 import { isRemotionCode } from "./remotion-compiler";
@@ -276,6 +277,38 @@ function SceneList({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Skill list                                                         */
+/* ------------------------------------------------------------------ */
+
+function SkillList({ skills }: { skills: SkillInfo[] }) {
+	const handleClick = useCallback((skill: SkillInfo) => {
+		// Dispatch a custom event that ChatPanel can pick up
+		window.dispatchEvent(new CustomEvent("skill:load", { detail: { name: skill.name } }));
+	}, []);
+
+	return (
+		<div className="flex-shrink-0">
+			<div className="px-3 py-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+				Skills
+			</div>
+			{skills.map((skill) => (
+				<div
+					key={skill.name}
+					onClick={() => handleClick(skill)}
+					className="flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors duration-75 hover:bg-muted/50"
+					title={skill.description}
+				>
+					<BookOpen className="flex-shrink-0 size-3.5 text-muted-foreground/40" />
+					<span className="flex-1 text-[13px] text-muted-foreground truncate">
+						{skill.name}
+					</span>
+				</div>
+			))}
+		</div>
+	);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main sidebar                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -286,6 +319,21 @@ export function FileTreeSidebar() {
 	const [filter, setFilter] = useState("");
 	const [menu, setMenu] = useState<ContextMenuState | null>(null);
 	const closeMenu = useCallback(() => setMenu(null), []);
+	const [skills, setSkills] = useState<SkillInfo[]>([]);
+
+	// Fetch available skills
+	useEffect(() => {
+		fetch("/api/agent/command", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: "skills" }),
+		})
+			.then((r) => r.json())
+			.then((data) => {
+				if (data.ok && data.skills) setSkills(data.skills);
+			})
+			.catch(() => {});
+	}, []);
 
 	// Split changes into Remotion scenes vs other files
 	const remotionPaths = useMemo(() => {
@@ -437,8 +485,18 @@ export function FileTreeSidebar() {
 					</>
 				)}
 
+				{/* Skills section */}
+				{skills.length > 0 && (
+					<>
+						{(hasScenes || hasOtherFiles) && (
+							<div className="border-t border-border mx-3 my-1" />
+						)}
+						<SkillList skills={skills} />
+					</>
+				)}
+
 				{/* Empty state */}
-				{!hasScenes && !hasOtherFiles && (
+				{!hasScenes && !hasOtherFiles && skills.length === 0 && (
 					<div className="p-4 text-muted-foreground text-xs text-center">
 						No changes
 					</div>

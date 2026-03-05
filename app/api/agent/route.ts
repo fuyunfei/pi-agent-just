@@ -33,9 +33,9 @@ export async function POST(req: Request) {
 	console.log(`[route] prompt="${promptPreview}" images=${images?.length ?? 0}`);
 
 	const sid = getSessionId(req);
-	let ctx: ReturnType<typeof getOrCreateSingleton>;
+	let ctx: Awaited<ReturnType<typeof getOrCreateSingleton>>;
 	try {
-		ctx = getOrCreateSingleton(sid);
+		ctx = await getOrCreateSingleton(sid);
 	} catch (err) {
 		return new Response(
 			JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),

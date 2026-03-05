@@ -8,8 +8,10 @@ import {
 	BarChart3Icon,
 	CpuIcon,
 	CheckIcon,
+	BookOpenIcon,
+	SparklesIcon,
 } from "lucide-react";
-import type { ModelInfo } from "./types";
+import type { ModelInfo, SkillInfo } from "./types";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                      */
@@ -53,7 +55,22 @@ const COMMAND_ITEMS: MenuItem[] = [
 		description: "Switch AI model",
 		icon: <CpuIcon className="size-3.5" />,
 	},
+	{
+		id: "/skill",
+		label: "/skill",
+		description: "Load a skill into context",
+		icon: <BookOpenIcon className="size-3.5" />,
+	},
 ];
+
+function buildSkillItems(skills: SkillInfo[]): MenuItem[] {
+	return skills.map((s) => ({
+		id: `/skill:${s.name}`,
+		label: s.name,
+		description: s.description.length > 60 ? `${s.description.slice(0, 57)}...` : s.description,
+		icon: <SparklesIcon className="size-3.5" />,
+	}));
+}
 
 function buildModelItems(models: ModelInfo[], currentModel: ModelInfo | null): MenuItem[] {
 	return models.map((m) => ({
@@ -77,13 +94,14 @@ export function useSlashCommandMenu(
 		models: ModelInfo[];
 		currentModel: ModelInfo | null;
 		onSwitchModel: (provider: string, modelId: string) => void;
+		skills?: SkillInfo[];
 	},
 ) {
 	const [query, setQuery] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [mode, setMode] = useState<"commands" | "models">("commands");
+	const [mode, setMode] = useState<"commands" | "models" | "skills">("commands");
 
-	const { models, currentModel, onSwitchModel } = options;
+	const { models, currentModel, onSwitchModel, skills = [] } = options;
 
 	const isSlash = query.startsWith("/") && !query.includes(" ");
 
@@ -92,13 +110,16 @@ export function useSlashCommandMenu(
 		if (mode === "models") {
 			return buildModelItems(models, currentModel);
 		}
+		if (mode === "skills") {
+			return buildSkillItems(skills);
+		}
 		if (!isSlash) return [];
 		const q = query.toLowerCase();
 		return COMMAND_ITEMS.filter((cmd) => cmd.id.startsWith(q));
-	}, [mode, isSlash, query, models, currentModel]);
+	}, [mode, isSlash, query, models, currentModel, skills]);
 
-	const visible = mode === "models" || (isSlash && items.length > 0);
-	const heading = mode === "models" ? "Select Model" : "Commands";
+	const visible = mode === "models" || mode === "skills" || (isSlash && items.length > 0);
+	const heading = mode === "models" ? "Select Model" : mode === "skills" ? "Skills" : "Commands";
 
 	// Reset selection when items change
 	useEffect(() => {
@@ -115,21 +136,25 @@ export function useSlashCommandMenu(
 	const selectItem = useCallback(
 		(item: MenuItem) => {
 			if (item.id === "/model") {
-				// Enter model sub-menu
 				setMode("models");
 				setQuery("");
 				clearTextarea();
 				return;
 			}
+			if (item.id === "/skill") {
+				setMode("skills");
+				setQuery("");
+				clearTextarea();
+				return;
+			}
 			if (item.model) {
-				// Switch model
 				onSwitchModel(item.model.provider, item.model.id);
 				setMode("commands");
 				setQuery("");
 				clearTextarea();
 				return;
 			}
-			// Regular command
+			// Skill selection or regular command
 			onSubmitCommand(item.id);
 			setMode("commands");
 			setQuery("");
@@ -147,8 +172,8 @@ export function useSlashCommandMenu(
 	const onTextareaChange = useCallback(
 		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
 			const val = e.target.value;
-			if (mode === "models" && val.length > 0) {
-				// If user starts typing in model mode, go back to commands mode
+			if ((mode === "models" || mode === "skills") && val.length > 0) {
+				// If user starts typing in sub-menu mode, go back to commands mode
 				setMode("commands");
 			}
 			setQuery(val);
@@ -177,8 +202,8 @@ export function useSlashCommandMenu(
 				e.preventDefault();
 				const item = items[selectedIndex];
 				if (item) selectItem(item);
-			} else if (e.key === "Backspace" && mode === "models" && e.currentTarget.value === "") {
-				// Backspace from empty model menu → go back to commands
+			} else if (e.key === "Backspace" && (mode === "models" || mode === "skills") && e.currentTarget.value === "") {
+				// Backspace from empty sub-menu → go back to commands
 				e.preventDefault();
 				setMode("commands");
 				setQuery("/");

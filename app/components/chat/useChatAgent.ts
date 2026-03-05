@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
-import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, ThinkingState, ToolCall } from "./types";
+import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, SkillInfo, ThinkingState, ToolCall } from "./types";
 import { AVAILABLE_MODELS } from "@/app/lib/models";
 
 type UIMessage = {
@@ -27,6 +27,7 @@ export function useChatAgent() {
 	const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
 	const [thinking, setThinking] = useState<ThinkingState>({ level: "medium", available: [], supported: false });
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
+	const [skills, setSkills] = useState<SkillInfo[]>([]);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
 
@@ -57,6 +58,20 @@ export function useChatAgent() {
 				if (data.thinking) {
 					setThinking(data.thinking);
 				}
+			})
+			.catch(() => {});
+	}, []);
+
+	// Fetch available skills on mount
+	useEffect(() => {
+		fetch("/api/agent/command", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: "skills" }),
+		})
+			.then((r) => r.json())
+			.then((data) => {
+				if (data.ok && data.skills) setSkills(data.skills);
 			})
 			.catch(() => {});
 	}, []);
@@ -157,11 +172,43 @@ export function useChatAgent() {
 				return true;
 			}
 
+			// Bare /skill — list available skills
+			if (cmd === "skill") {
+				if (skills.length === 0) {
+					addSystemMessage("No skills available");
+				} else {
+					const list = skills.map((s) => `  /skill:${s.name} — ${s.description}`).join("\n");
+					addSystemMessage(`Available skills:\n${list}`);
+				}
+				return true;
+			}
+
+			// Skill command: /skill:name — tell agent to read the skill file
+			if (cmd.startsWith("skill:")) {
+				const skillName = cmd.slice(6);
+				const skill = skills.find((s) => s.name === skillName);
+				if (skill) {
+					addSystemMessage(`Loading skill: ${skill.name}`);
+					// Can't use _expandSkillCommand (needs real FS), so send as
+					// a prompt that instructs the agent to read the skill file
+					setTimeout(() => {
+						send(
+							`Read the skill file at ${skill.filePath} and follow its instructions.`,
+							undefined,
+							`/skill:${skill.name}`,
+						);
+					}, 0);
+					return true;
+				}
+				addSystemMessage(`Unknown skill: ${skillName}`);
+				return true;
+			}
+
 			// Unknown command
-			addSystemMessage(`Unknown command: /${cmd}\nAvailable: /new, /compact, /session`);
+			addSystemMessage(`Unknown command: /${cmd}\nAvailable: /new, /compact, /session, /skill`);
 			return true;
 		},
-		[addSystemMessage],
+		[addSystemMessage, skills],
 	);
 
 	// ---------------------------------------------------------------------------
@@ -180,8 +227,9 @@ export function useChatAgent() {
 
 			// Intercept slash commands
 			if (text.startsWith("/") && !files?.length) {
-				await runCommand(text);
-				return;
+				const handled = await runCommand(text);
+				if (handled) return;
+				// If not handled (e.g. /skill:name), fall through to send as prompt
 			}
 
 			const userMsg: ChatMessage = { id: nextId(), role: "user", content: displayText || text };
@@ -523,5 +571,5 @@ export function useChatAgent() {
 		}
 	}, []);
 
-	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage };
+	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills };
 }

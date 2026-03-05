@@ -115,6 +115,7 @@ interface ToolDisplay {
 	label: string;
 	isScene?: boolean;
 	isEdit?: boolean;
+	isSkill?: boolean;
 	sceneDuration?: string | null;
 }
 
@@ -196,6 +197,15 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	if (name === "read" || name === "readFile") {
 		const path = String(args.path || args.file_path || "");
 		const short = path.split("/").pop() || path;
+		// Skill file reads get a distinct icon
+		if (path.includes("/skills/")) {
+			const skillName = path.match(/\/skills\/([^/]+)\//)?.[1] || short;
+			return {
+				icon: <BookOpenIcon className="size-3.5" />,
+				label: short === "SKILL.md" ? `skill: ${skillName}` : short,
+				isSkill: true,
+			};
+		}
 		return {
 			icon: <FileIcon className="size-3.5" />,
 			label: short || "Reading…",
@@ -404,6 +414,22 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 						</span>
 					)}
 				</button>
+			</div>
+		);
+	}
+
+	// Skill read card — subtle inline indicator
+	if (display.isSkill) {
+		return (
+			<div className="my-1">
+				<div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-xs">
+					{isRunning ? (
+						<Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+					) : (
+						<BookOpenIcon className="size-3.5 text-muted-foreground/60" />
+					)}
+					<span className="text-muted-foreground/70 truncate">{display.label}</span>
+				</div>
 			</div>
 		);
 	}
@@ -797,7 +823,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking }
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -815,6 +841,16 @@ export function ChatPanel() {
 	useEffect(() => {
 		return () => clearTimeout(clearTimerRef.current);
 	}, []);
+
+	// Listen for skill:load from sidebar
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { name } = (e as CustomEvent).detail || {};
+			if (name) send(`/skill:${name}`);
+		};
+		window.addEventListener("skill:load", handler);
+		return () => window.removeEventListener("skill:load", handler);
+	}, [send]);
 
 	// Listen for retry-scene from error scene cards
 	useEffect(() => {
@@ -839,6 +875,7 @@ export function ChatPanel() {
 		models: AVAILABLE_MODELS,
 		currentModel,
 		onSwitchModel: switchModel,
+		skills,
 	});
 
 	const handleSubmit = useCallback(
