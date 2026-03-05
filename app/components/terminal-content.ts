@@ -145,8 +145,8 @@ pnpm dev
 
 \`\`\`bash
 # Set AWS credentials
-echo "REMOTION_AWS_ACCESS_KEY_ID=..." >> .env.local
-echo "REMOTION_AWS_SECRET_ACCESS_KEY=..." >> .env.local
+echo "AWS_ACCESS_KEY_ID=..." >> .env.local
+echo "AWS_SECRET_ACCESS_KEY=..." >> .env.local
 
 # Deploy Lambda function + S3 site bundle
 node deploy.mjs

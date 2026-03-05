@@ -57,8 +57,8 @@ export async function POST(req: Request) {
 		const lambda = new LambdaClient({
 			region: REGION,
 			credentials: {
-				accessKeyId: process.env.REMOTION_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || "",
-				secretAccessKey: process.env.REMOTION_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || "",
+				accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+				secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
 			},
 		});
 

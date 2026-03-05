@@ -1,5 +1,5 @@
 /** @type {import('@remotion/lambda').AwsRegion} */
-export const REGION = process.env.REMOTION_AWS_REGION || "us-east-1";
+export const REGION = process.env.AWS_REGION || "us-east-1";
 
 export const SITE_NAME = "pi-agent-remotion";
 export const COMP_NAME = "DynamicComp";

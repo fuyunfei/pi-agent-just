@@ -106,9 +106,9 @@ Deploy script: creates IAM role `pi-concat-role` (S3 + CloudWatch), downloads ff
 
 | Var | Used by |
 |-----|---------|
-| `REMOTION_AWS_ACCESS_KEY_ID` | render, concat, deploy |
-| `REMOTION_AWS_SECRET_ACCESS_KEY` | render, concat, deploy |
-| `REMOTION_AWS_REGION` | all (default: `us-east-1`) |
+| `AWS_ACCESS_KEY_ID` | render, concat, deploy |
+| `AWS_SECRET_ACCESS_KEY` | render, concat, deploy |
+| `AWS_REGION` | all (default: `us-east-1`) |
 | `REMOTION_BUCKET_NAME` | concat deploy (S3 upload for >50MB zip) |
 
 ## Design Decisions
@@ -124,6 +124,18 @@ Deploy script: creates IAM role `pi-concat-role` (S3 + CloudWatch), downloads ff
 **Concat on Lambda** — Same AWS region as S3. All traffic internal network. Previous approach (Next.js server) had two cross-network hops.
 
 **Polling, not push** — 1.2s poll. Acceptable for UX, avoids WebSocket complexity.
+
+## Known Issue: Image inlining fails on Vercel multi-instance
+
+**Symptom:** `Error loading image with src: https://remotionlambda-xxx.s3.amazonaws.com/img/xxx.png`
+
+**Root cause:** OverlayFs is in-memory, per Vercel serverless instance. When 8 concurrent render requests fire, most hit cold instances that create empty OverlayFs. `inlineImages()` silently catches `readFileBuffer` errors → original `/img/` path stays in code → Lambda resolves it against S3 site bucket → 404.
+
+**Evidence (2026-03-05):** Lambda CloudWatch logs confirmed code arrived with raw `<Img src="/img/desert_oil.png" />` instead of `data:image/png;base64,...`. Session `d6d13d97` was active, 8 clips sent, 7 failed.
+
+**Fix options:**
+- **A. Frontend inline (治标):** Client fetches `/img/*` → data URI before sending to `/api/render`. Same multi-instance risk on fetch, but less likely for sequential requests.
+- **B. Images to S3 (治本):** `add_visual` uploads to S3, returns public URL. Lambda fetches directly. Eliminates in-memory dependency entirely.
 
 ## Constraints
 

@@ -55,6 +55,7 @@ function notifyDone(clipName: string) {
 export function useRenderQueue() {
 	const [states, setStates] = useState<Map<string, ClipRenderState>>(new Map());
 	const [isConcatting, setIsConcatting] = useState(false);
+	const [concatError, setConcatError] = useState<string | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
 	const isRunningRef = useRef(false);
 
@@ -230,6 +231,7 @@ export function useRenderQueue() {
 			}
 			if (urls.length !== jobs.length) return;
 
+			setConcatError(null);
 			setIsConcatting(true);
 			try {
 				const res = await fetch("/api/render/concat", {
@@ -250,11 +252,11 @@ export function useRenderQueue() {
 					if (data.type === "success") {
 						downloadUrl(data.data.url, "video.mp4");
 					} else {
-						console.error("[auto-concat]", data.message);
+						setConcatError(data.message ?? "Merge failed");
 					}
 				}
 			} catch (err) {
-				console.error("[auto-concat]", err);
+				setConcatError((err as Error).message ?? "Merge failed");
 			} finally {
 				setIsConcatting(false);
 			}
@@ -262,39 +264,50 @@ export function useRenderQueue() {
 		[],
 	);
 
-	/** Export all clips with budget scheduling. */
+	/** Export all clips with budget scheduling. Preserves already-done clips. */
 	const exportAll = useCallback(
 		async (jobs: RenderJob[]) => {
 			if (isRunningRef.current || jobs.length === 0) return;
 			isRunningRef.current = true;
 			skippedIds.current.clear();
-			resultUrls.current.clear();
+			setConcatError(null);
 
 			const abort = new AbortController();
 			abortRef.current = abort;
 
-			// Mark all as queued
-			setStates(() => {
+			// Preserve done clips, only queue the rest
+			resultUrls.current.clear();
+			setStates((prev) => {
 				const m = new Map<string, ClipRenderState>();
 				for (const job of jobs) {
-					m.set(job.clipId, { status: "queued" });
+					const existing = prev.get(job.clipId);
+					if (existing?.status === "done") {
+						m.set(job.clipId, existing);
+						resultUrls.current.set(job.clipId, existing.url);
+					} else {
+						m.set(job.clipId, { status: "queued" });
+					}
 				}
 				return m;
 			});
 
-			// Single clip — direct render with auto-download
-			if (jobs.length === 1) {
+			const pendingJobs = jobs.filter((j) => !resultUrls.current.has(j.clipId));
+
+			if (pendingJobs.length === 0 && jobs.length >= 2) {
+				// All already done — just re-concat
+				await autoConcat(jobs, abort);
+			} else if (jobs.length === 1 && pendingJobs.length === 1) {
+				// Single clip — direct render with auto-download
 				const clipAbort = new AbortController();
 				const onGlobalAbort = () => clipAbort.abort();
 				abort.signal.addEventListener("abort", onGlobalAbort);
-				await renderOne(jobs[0], clipAbort);
+				await renderOne(pendingJobs[0], clipAbort);
 				abort.signal.removeEventListener("abort", onGlobalAbort);
-			} else {
-				await runBudgetScheduler(jobs, abort);
+			} else if (pendingJobs.length > 0) {
+				await runBudgetScheduler(pendingJobs, abort);
 				await autoConcat(jobs, abort);
 			}
 
-			resultUrls.current.clear();
 			isRunningRef.current = false;
 			abortRef.current = null;
 		},
@@ -333,14 +346,39 @@ export function useRenderQueue() {
 				}
 			}
 
+			setConcatError(null);
 			await runBudgetScheduler(failedJobs, abort);
 			await autoConcat(jobs, abort);
 
-			resultUrls.current.clear();
 			isRunningRef.current = false;
 			abortRef.current = null;
 		},
 		[states, runBudgetScheduler, autoConcat],
+	);
+
+	/** Retry only the concat step (all clips must already be done). */
+	const retryConcat = useCallback(
+		async (jobs: RenderJob[]) => {
+			if (isRunningRef.current || jobs.length < 2) return;
+			isRunningRef.current = true;
+
+			// Seed URLs from done states
+			resultUrls.current.clear();
+			for (const job of jobs) {
+				const s = states.get(job.clipId);
+				if (s?.status === "done" && s.url) {
+					resultUrls.current.set(job.clipId, s.url);
+				}
+			}
+
+			const abort = new AbortController();
+			abortRef.current = abort;
+			await autoConcat(jobs, abort);
+
+			isRunningRef.current = false;
+			abortRef.current = null;
+		},
+		[states, autoConcat],
 	);
 
 	/** Cancel a single clip. */
@@ -372,6 +410,7 @@ export function useRenderQueue() {
 	const reset = useCallback(() => {
 		abortRef.current?.abort();
 		setStates(new Map());
+		setConcatError(null);
 	}, []);
 
 	/** Get render state for a specific clip. */
@@ -385,7 +424,7 @@ export function useRenderQueue() {
 	);
 
 	return {
-		exportAll, cancelOne, cancel, retryFailed, reset,
-		getClipState, states, isRunning, isConcatting,
+		exportAll, cancelOne, cancel, retryFailed, retryConcat, reset,
+		getClipState, states, isRunning, isConcatting, concatError,
 	};
 }

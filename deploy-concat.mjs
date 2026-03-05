@@ -31,7 +31,7 @@ import { pipeline } from "stream/promises";
 import { createWriteStream } from "fs";
 import { Readable } from "stream";
 
-const REGION = process.env.REMOTION_AWS_REGION || process.env.AWS_REGION || "us-east-1";
+const REGION = process.env.AWS_REGION || "us-east-1";
 const FUNCTION_NAME = "pi-concat";
 const ROLE_NAME = "pi-concat-role";
 const FFMPEG_URL =
@@ -40,8 +40,8 @@ const FFMPEG_URL =
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function checkCredentials() {
-	const key = process.env.AWS_ACCESS_KEY_ID || process.env.REMOTION_AWS_ACCESS_KEY_ID;
-	const secret = process.env.AWS_SECRET_ACCESS_KEY || process.env.REMOTION_AWS_SECRET_ACCESS_KEY;
+	const key = process.env.AWS_ACCESS_KEY_ID;
+	const secret = process.env.AWS_SECRET_ACCESS_KEY;
 	if (!key || !secret) {
 		console.error("Missing AWS credentials (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)");
 		process.exit(1);

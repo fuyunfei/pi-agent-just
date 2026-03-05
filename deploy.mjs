@@ -4,8 +4,8 @@
  * Usage: node deploy.mjs
  *
  * Required env vars:
- *   REMOTION_AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY_ID)
- *   REMOTION_AWS_SECRET_ACCESS_KEY (or AWS_SECRET_ACCESS_KEY)
+ *   AWS_ACCESS_KEY_ID
+ *   AWS_SECRET_ACCESS_KEY
  */
 
 import { deployFunction, deploySite, getOrCreateBucket } from "@remotion/lambda";
@@ -14,13 +14,13 @@ import { DISK, RAM, REGION, SITE_NAME, TIMEOUT } from "./config.mjs";
 
 console.log("Region:", REGION);
 
-if (!process.env.AWS_ACCESS_KEY_ID && !process.env.REMOTION_AWS_ACCESS_KEY_ID) {
-	console.error("Missing AWS_ACCESS_KEY_ID or REMOTION_AWS_ACCESS_KEY_ID");
+if (!process.env.AWS_ACCESS_KEY_ID) {
+	console.error("Missing AWS_ACCESS_KEY_ID");
 	console.error("See: https://www.remotion.dev/docs/lambda/setup");
 	process.exit(1);
 }
-if (!process.env.AWS_SECRET_ACCESS_KEY && !process.env.REMOTION_AWS_SECRET_ACCESS_KEY) {
-	console.error("Missing AWS_SECRET_ACCESS_KEY or REMOTION_AWS_SECRET_ACCESS_KEY");
+if (!process.env.AWS_SECRET_ACCESS_KEY) {
+	console.error("Missing AWS_SECRET_ACCESS_KEY");
 	process.exit(1);
 }
 
