@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
-import type { ChatMessage, MessagePart, ModelInfo, SessionUsage, SkillInfo, ThinkingState, ToolCall } from "./types";
+import type { ChatMessage, ImageModelInfo, MessagePart, ModelInfo, SessionUsage, SkillInfo, ThinkingState, ToolCall } from "./types";
 import { AVAILABLE_MODELS } from "@/app/lib/models";
 
 type UIMessage = {
@@ -29,6 +29,9 @@ export function useChatAgent() {
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const [skills, setSkills] = useState<SkillInfo[]>([]);
 	const [skillsEnabled, setSkillsEnabled] = useState(false);
+	const [imageGenEnabled, setImageGenEnabled] = useState(true);
+	const [imageModel, setImageModelState] = useState("");
+	const [imageModels, setImageModels] = useState<ImageModelInfo[]>([]);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
 
@@ -75,6 +78,24 @@ export function useChatAgent() {
 				if (data.ok && data.skills) {
 					setSkills(data.skills);
 					if (typeof data.enabled === "boolean") setSkillsEnabled(data.enabled);
+				}
+			})
+			.catch(() => {});
+	}, []);
+
+	// Fetch image gen status on mount
+	useEffect(() => {
+		fetch("/api/agent/command", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: "image-gen-status" }),
+		})
+			.then((r) => r.json())
+			.then((data) => {
+				if (data.ok) {
+					setImageGenEnabled(data.enabled);
+					setImageModelState(data.model);
+					if (data.availableModels) setImageModels(data.availableModels);
 				}
 			})
 			.catch(() => {});
@@ -589,5 +610,32 @@ export function useChatAgent() {
 		}
 	}, []);
 
-	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled };
+	const toggleImageGen = useCallback(async () => {
+		try {
+			const res = await fetch("/api/agent/command", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ command: "toggle-image-gen" }),
+			});
+			const data = await res.json();
+			if (data.ok) setImageGenEnabled(data.enabled);
+		} catch {
+			// Toggle failed
+		}
+	}, []);
+
+	const setImageModel = useCallback(async (model: string) => {
+		setImageModelState(model);
+		try {
+			await fetch("/api/agent/command", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ command: "set-image-model", model }),
+			});
+		} catch {
+			// Set failed
+		}
+	}, []);
+
+	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled, imageGenEnabled, imageModel, imageModels, toggleImageGen, setImageModel };
 }

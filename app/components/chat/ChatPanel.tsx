@@ -62,7 +62,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useChatAgent } from "./useChatAgent";
 import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
-import type { ChatMessage, ModelInfo, ThinkingState, ToolCall } from "./types";
+import type { ChatMessage, ImageModelInfo, ModelInfo, ThinkingState, ToolCall } from "./types";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
 import { BrainIcon } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/app/lib/models";
@@ -715,7 +715,7 @@ const THINKING_LABELS: Record<string, string> = {
 	xhigh: "Max",
 };
 
-function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, skillsEnabled, onToggleSkills, skillCount }: {
+function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, skillsEnabled, onToggleSkills, skillCount, imageGenEnabled, onToggleImageGen, imageModel, onSetImageModel, imageModels }: {
 	models: ModelInfo[];
 	current: ModelInfo | null;
 	onSwitch: (provider: string, id: string) => void;
@@ -724,6 +724,11 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 	skillsEnabled: boolean;
 	onToggleSkills: () => void;
 	skillCount: number;
+	imageGenEnabled: boolean;
+	onToggleImageGen: () => void;
+	imageModel: string;
+	onSetImageModel: (model: string) => void;
+	imageModels: ImageModelInfo[];
 }) {
 	const [open, setOpen] = useState(false);
 	const active = current || DEFAULT_MODEL;
@@ -754,6 +759,12 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 						<span className="flex items-center gap-1 text-brand-clay/60">
 							<span className="text-[9px]">·</span>
 							<BookOpenIcon className="size-3" />
+						</span>
+					)}
+					{imageGenEnabled && (
+						<span className="flex items-center gap-1 text-brand-clay/60">
+							<span className="text-[9px]">·</span>
+							<ImageIcon className="size-3" />
 						</span>
 					)}
 					<ChevronDownIcon className={cn(
@@ -843,6 +854,49 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 						</button>
 					</>
 				)}
+				{imageModels.length > 0 && (
+					<>
+						<div className="mx-2.5 my-1 border-t border-border/20" />
+						<button
+							type="button"
+							onClick={onToggleImageGen}
+							className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-left transition-all duration-150 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+						>
+							<ImageIcon className="size-3 flex-shrink-0" />
+							<span className="flex-1">Image Gen</span>
+							<span className={cn(
+								"text-[10px] px-1.5 py-0.5 rounded-full transition-all duration-150",
+								imageGenEnabled
+									? "bg-brand-moss/15 text-brand-moss"
+									: "bg-muted text-muted-foreground/40",
+							)}>
+								{imageGenEnabled ? "on" : "off"}
+							</span>
+						</button>
+						{imageGenEnabled && (
+							<div className="mx-1.5 mb-1.5 grid grid-cols-2 gap-0.5 rounded-lg bg-muted/50 p-0.5">
+								{imageModels.map((m) => {
+									const selected = m.id === imageModel;
+									return (
+										<button
+											key={m.id}
+											type="button"
+											onClick={() => onSetImageModel(m.id)}
+											className={cn(
+												"rounded-md py-1.5 px-1.5 text-[10px] text-center transition-all duration-150",
+												selected
+													? "bg-background text-brand-clay shadow-[0_1px_3px_rgba(0,0,0,0.15)]"
+													: "text-muted-foreground/40 hover:text-muted-foreground active:text-foreground",
+											)}
+										>
+											{m.label}
+										</button>
+									);
+								})}
+							</div>
+						)}
+					</>
+				)}
 			</PopoverContent>
 		</Popover>
 	);
@@ -853,7 +907,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled, imageGenEnabled, imageModel, imageModels, toggleImageGen, setImageModel } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -1061,7 +1115,7 @@ export function ChatPanel() {
 							>
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
-							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} skillsEnabled={skillsEnabled} onToggleSkills={toggleSkillsEnabled} skillCount={skills.length} />
+							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} skillsEnabled={skillsEnabled} onToggleSkills={toggleSkillsEnabled} skillCount={skills.length} imageGenEnabled={imageGenEnabled} onToggleImageGen={toggleImageGen} imageModel={imageModel} onSetImageModel={setImageModel} imageModels={imageModels} />
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">

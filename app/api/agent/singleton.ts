@@ -141,6 +141,8 @@ interface Singleton {
 	overlayFs: OverlayFs;
 	lastAccess: number;
 	skillsEnabled: boolean;
+	imageGenEnabled: boolean;
+	imageModel: string;
 }
 
 // Persist across Next.js HMR — module-level Map gets wiped on hot reload
@@ -177,9 +179,14 @@ function evictSessions() {
 // Image generation tool
 // ---------------------------------------------------------------------------
 
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+export const IMAGE_MODELS = [
+	{ id: "google/gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash", desc: "fast" },
+	{ id: "openai/gpt-5-image-mini", label: "GPT-5 Image Mini", desc: "balanced" },
+	{ id: "bytedance-seed/seedream-4.5", label: "Seedream 4.5", desc: "creative" },
+	{ id: "sourceful/riverflow-v2-fast", label: "Riverflow v2", desc: "fast" },
+];
 
-function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: string) {
+function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: string, imageState: { enabled: boolean; model: string }) {
 	return {
 		name: "add_visual",
 		label: "Add Visual",
@@ -193,6 +200,9 @@ function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: st
 			params: { prompt: string; filename: string },
 			signal?: AbortSignal,
 		): Promise<AgentToolResult<{ imageUrl?: string }>> {
+			if (!imageState.enabled) {
+				return { content: [{ type: "text", text: "Image generation is currently disabled." }], details: {} };
+			}
 			const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
 				method: "POST",
 				signal,
@@ -201,7 +211,7 @@ function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: st
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
-					model: IMAGE_MODEL,
+					model: imageState.model,
 					messages: [{ role: "user", content: params.prompt }],
 					modalities: ["image"],
 				}),
@@ -269,6 +279,8 @@ export async function getOrCreateSingleton(sessionId = "default") {
 	authStorage.setRuntimeApiKey(provider, apiKey);
 	const modelRegistry = new ModelRegistry(authStorage);
 
+	const imageState = { enabled: true, model: IMAGE_MODELS[0].id };
+
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const sandboxedTools: Record<string, any> = {
 		read: createReadTool(mountPoint, {
@@ -289,7 +301,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		grep: createGrepTool(mountPoint, {
 			operations: createOverlayGrepOps(overlayFs),
 		}),
-		generate_image: createImageGenTool(apiKey, overlayFs, mountPoint),
+		generate_image: createImageGenTool(apiKey, overlayFs, mountPoint, imageState),
 	};
 
 	const agent = new Agent({
@@ -345,11 +357,22 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: true, imageModel: imageState.model };
 	// Wire skillState to entry so toggleSkills can flip it
 	Object.defineProperty(entry, "skillsEnabled", {
 		get: () => skillState.enabled,
 		set: (v: boolean) => { skillState.enabled = v; },
+		enumerable: true,
+	});
+	// Wire imageState to entry
+	Object.defineProperty(entry, "imageGenEnabled", {
+		get: () => imageState.enabled,
+		set: (v: boolean) => { imageState.enabled = v; },
+		enumerable: true,
+	});
+	Object.defineProperty(entry, "imageModel", {
+		get: () => imageState.model,
+		set: (v: string) => { imageState.model = v; },
 		enumerable: true,
 	});
 	sessions.set(sessionId, entry);
@@ -382,6 +405,36 @@ export function toggleSkills(sessionId = "default"): boolean {
 export function isSkillsEnabled(sessionId = "default"): boolean {
 	const s = sessions.get(sessionId);
 	return s?.skillsEnabled ?? false;
+}
+
+/** Toggle image gen on/off for a session. Returns new state. */
+export function toggleImageGen(sessionId = "default"): boolean {
+	const s = sessions.get(sessionId);
+	if (!s) return false;
+	s.imageGenEnabled = !s.imageGenEnabled;
+	console.log(`[agent] image gen ${s.imageGenEnabled ? "enabled" : "disabled"} session=${sessionId.slice(0, 8)}`);
+	return s.imageGenEnabled;
+}
+
+/** Check if image gen is enabled for a session. */
+export function isImageGenEnabled(sessionId = "default"): boolean {
+	const s = sessions.get(sessionId);
+	return s?.imageGenEnabled ?? true;
+}
+
+/** Set the image model for a session. */
+export function setImageModel(sessionId = "default", model: string): string {
+	const s = sessions.get(sessionId);
+	if (!s) return IMAGE_MODELS[0].id;
+	s.imageModel = model;
+	console.log(`[agent] image model set to ${model} session=${sessionId.slice(0, 8)}`);
+	return s.imageModel;
+}
+
+/** Get the current image model for a session. */
+export function getImageModel(sessionId = "default"): string {
+	const s = sessions.get(sessionId);
+	return s?.imageModel ?? IMAGE_MODELS[0].id;
 }
 
 /** Return aggregated session stats + context usage (minimal, for footer). */

@@ -45,3 +45,9 @@ export interface ThinkingState {
 	available: string[];
 	supported: boolean;
 }
+
+export interface ImageModelInfo {
+	id: string;
+	label: string;
+	desc: string;
+}
