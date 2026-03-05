@@ -93,16 +93,14 @@ function ClipRow({ clipId, clipName, state, onCancel }: {
 
 	if (state.status === "error") {
 		return (
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<div className="flex items-center gap-3 py-1.5">
-						<XCircle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
-						<span className="flex-1 truncate text-sm text-red-400">{clipName}</span>
-						<span className="text-xs text-red-400">failed</span>
-					</div>
-				</TooltipTrigger>
-				<TooltipContent side="left" className="max-w-[250px]">{state.message}</TooltipContent>
-			</Tooltip>
+			<div className="py-1.5">
+				<div className="flex items-center gap-3">
+					<XCircle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
+					<span className="flex-1 truncate text-sm text-red-400">{clipName}</span>
+					<span className="text-xs text-red-400">failed</span>
+				</div>
+				<p className="text-xs text-red-400/80 mt-1 ml-6.5 break-all">{state.message}</p>
+			</div>
 		);
 	}
 
@@ -162,6 +160,8 @@ function ExportButton() {
 			fps: payload.fps,
 		}));
 		setJobs(newJobs);
+		// Fix #6: auto-open dialog for multi-clip exports
+		if (selectedScenes.length > 1) setDialogOpen(true);
 		queue.exportAll(newJobs);
 	}, [payload, selected, queue]);
 
@@ -173,10 +173,15 @@ function ExportButton() {
 		queue.retryConcat(jobs);
 	}, [queue, jobs]);
 
+	// Fix #5: Dismiss resets state AND closes; closing alone preserves state
 	const handleDismiss = useCallback(() => {
 		queue.reset();
 		setDialogOpen(false);
 	}, [queue]);
+
+	const handleCloseDialog = useCallback(() => {
+		setDialogOpen(false);
+	}, []);
 
 	// No remotion files — hide export
 	const hasRemotionFiles = changes.some((c) => c.content && /from\s+["']remotion["']/.test(c.content));
@@ -187,9 +192,9 @@ function ExportButton() {
 	const stateEntries = Array.from(queue.states.entries());
 	const hasErrors = stateEntries.some(([, s]) => s.status === "error");
 	const doneEntries = stateEntries.filter(([, s]) => s.status === "done");
+	// Fix #3: allDone requires ALL clips to be done, not just non-idle ones
 	const allDone = stateEntries.length > 0
-		&& stateEntries.every(([, s]) => s.status === "done" || s.status === "idle")
-		&& doneEntries.length > 0;
+		&& doneEntries.length === stateEntries.length;
 	const hasResults = stateEntries.length > 0;
 
 	/** Format frames as m:ss */
@@ -243,17 +248,13 @@ function ExportButton() {
 					</a>
 				);
 			}
+			// Fix #2: single clip error opens dialog for full error details
 			if (s.status === "error") {
 				return (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button onClick={() => queue.reset()} className="flex items-center gap-1 text-[11px] text-red-400 hover:text-red-300 px-2">
-								<XCircle className="h-3 w-3" />
-								<span>Failed</span>
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="bottom">{s.message}</TooltipContent>
-					</Tooltip>
+					<button onClick={() => setDialogOpen(true)} className="flex items-center gap-1 text-[11px] text-red-400 hover:text-red-300 px-2">
+						<XCircle className="h-3 w-3" />
+						<span>Failed</span>
+					</button>
 				);
 			}
 		}
@@ -292,11 +293,12 @@ function ExportButton() {
 					</button>
 				);
 			}
+			// Fix #4: partial failure shows done count with warning, not just "Export failed"
 			if (hasErrors) {
 				return (
-					<button onClick={() => setDialogOpen(true)} className="flex items-center gap-1.5 text-[11px] text-red-400 px-2 hover:text-red-300 transition-colors">
-						<XCircle className="h-3 w-3" />
-						<span>Export failed</span>
+					<button onClick={() => setDialogOpen(true)} className="flex items-center gap-1.5 text-[11px] text-amber-400 px-2 hover:text-amber-300 transition-colors">
+						<AlertTriangle className="h-3 w-3" />
+						<span>{doneEntries.length}/{stateEntries.length} clips done</span>
 					</button>
 				);
 			}
@@ -329,11 +331,28 @@ function ExportButton() {
 			)}
 
 			{/* Export Dialog */}
-			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-				<DialogContent className="sm:max-w-md" showCloseButton={!isActive}>
+			<Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) handleCloseDialog(); else setDialogOpen(true); }}>
+				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle className="text-base">Export Video</DialogTitle>
 						<DialogDescription className="sr-only">Select scenes and export</DialogDescription>
+						{/* Fix #7: overall progress bar for multi-clip rendering */}
+						{hasResults && stateEntries.length > 1 && isActive && (
+							<div className="flex items-center gap-2 pt-1">
+								<div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+									<div
+										className="h-full rounded-full transition-[width] duration-300"
+										style={{
+											width: `${Math.round((doneEntries.length / stateEntries.length) * 100)}%`,
+											background: "#6366f1",
+										}}
+									/>
+								</div>
+								<span className="text-xs text-muted-foreground whitespace-nowrap">
+									Rendering {doneEntries.length}/{stateEntries.length} clips...
+								</span>
+							</div>
+						)}
 					</DialogHeader>
 
 					{/* ── Scene selection (idle state) ── */}
@@ -397,6 +416,19 @@ function ExportButton() {
 									<AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0" />
 									<span className="flex-1 text-sm text-amber-400 break-all">{queue.concatError}</span>
 								</div>
+							)}
+
+							{/* Merged video download */}
+							{queue.concatUrl && !isActive && (
+								<a
+									href={queue.concatUrl}
+									download="video.mp4"
+									className="flex items-center justify-center gap-2 w-full py-2 rounded-md text-sm font-medium text-white transition-colors hover:opacity-90"
+									style={{ background: "#6366f1" }}
+								>
+									<Download className="h-4 w-4" />
+									Download video.mp4
+								</a>
 							)}
 
 							{/* Actions */}

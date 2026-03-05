@@ -56,6 +56,7 @@ export function useRenderQueue() {
 	const [states, setStates] = useState<Map<string, ClipRenderState>>(new Map());
 	const [isConcatting, setIsConcatting] = useState(false);
 	const [concatError, setConcatError] = useState<string | null>(null);
+	const [concatUrl, setConcatUrl] = useState<string | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
 	const isRunningRef = useRef(false);
 
@@ -232,6 +233,7 @@ export function useRenderQueue() {
 			if (urls.length !== jobs.length) return;
 
 			setConcatError(null);
+			setConcatUrl(null);
 			setIsConcatting(true);
 			try {
 				const res = await fetch("/api/render/concat", {
@@ -245,11 +247,12 @@ export function useRenderQueue() {
 					// No S3 bucket — response is the raw file
 					const blob = await res.blob();
 					const blobUrl = URL.createObjectURL(blob);
+					setConcatUrl(blobUrl);
 					downloadUrl(blobUrl, "video.mp4");
-					setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
 				} else {
 					const data = await res.json();
 					if (data.type === "success") {
+						setConcatUrl(data.data.url);
 						downloadUrl(data.data.url, "video.mp4");
 					} else {
 						setConcatError(data.message ?? "Merge failed");
@@ -411,6 +414,10 @@ export function useRenderQueue() {
 		abortRef.current?.abort();
 		setStates(new Map());
 		setConcatError(null);
+		setConcatUrl((prev) => {
+			if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+			return null;
+		});
 	}, []);
 
 	/** Get render state for a specific clip. */
@@ -425,6 +432,6 @@ export function useRenderQueue() {
 
 	return {
 		exportAll, cancelOne, cancel, retryFailed, retryConcat, reset,
-		getClipState, states, isRunning, isConcatting, concatError,
+		getClipState, states, isRunning, isConcatting, concatError, concatUrl,
 	};
 }
