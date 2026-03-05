@@ -11,6 +11,7 @@
     "deploy:lambda": "node deploy.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.800.0",
     "@babel/standalone": "^7.29.1",
     "@codesandbox/sandpack-client": "^2.19.8",
     "@mariozechner/pi-agent-core": "^0.55.3",
@@ -66,6 +67,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.183.1",
     "eslint": "^9",
+    "ffmpeg-static": "^5.2.0",
     "eslint-config-next": "16.1.6",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4",
