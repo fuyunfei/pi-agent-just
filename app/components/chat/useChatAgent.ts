@@ -101,6 +101,13 @@ export function useChatAgent() {
 			.catch(() => {});
 	}, []);
 
+	// Broadcast agent streaming status for other components (e.g. export button)
+	useEffect(() => {
+		window.dispatchEvent(new CustomEvent("studio:agent-status", {
+			detail: { isStreaming: status === "submitted" || status === "streaming" },
+		}));
+	}, [status]);
+
 	const updateLastAssistant = useCallback(
 		(updater: (msg: ChatMessage) => ChatMessage) => {
 			setMessages((prev) => {

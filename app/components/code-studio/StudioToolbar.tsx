@@ -114,6 +114,7 @@ function ExportButton() {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [jobs, setJobs] = useState<RenderJob[]>([]);
+	const [isAgentStreaming, setIsAgentStreaming] = useState(false);
 
 	// Listen for render data from RemotionPreview
 	useEffect(() => {
@@ -139,6 +140,13 @@ function ExportButton() {
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [payload]);
+
+	// Listen for agent streaming status
+	useEffect(() => {
+		const handler = (e: Event) => setIsAgentStreaming((e as CustomEvent).detail.isStreaming);
+		window.addEventListener("studio:agent-status", handler);
+		return () => window.removeEventListener("studio:agent-status", handler);
+	}, []);
 
 	const toggleScene = useCallback((filename: string) => {
 		setSelected((prev) => {
@@ -317,6 +325,7 @@ function ExportButton() {
 					variant="ghost"
 					size="sm"
 					className="h-7 gap-1.5 px-2 text-xs"
+					disabled={isAgentStreaming}
 					onClick={() => {
 						if (multiScene) {
 							setDialogOpen(true);
@@ -378,7 +387,7 @@ function ExportButton() {
 							<Button
 								className="w-full gap-2"
 								style={{ background: "#6366f1" }}
-								disabled={selected.size === 0}
+								disabled={selected.size === 0 || isAgentStreaming}
 								onClick={exportSelected}
 							>
 								<Film className="h-4 w-4" />
