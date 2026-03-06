@@ -1,6 +1,6 @@
 ---
 name: remotion-best-practices
-description: Best practices for Remotion - Video creation in React
+description: "ALWAYS read this before writing or reviewing any Remotion .tsx code. Contains authoritative rules for animations, transitions, sequencing, 3D, GIFs, text layout, audio, and video."
 metadata:
   tags: remotion, video, react, animation, composition
 ---
