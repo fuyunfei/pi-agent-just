@@ -306,7 +306,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		grep: createGrepTool(mountPoint, {
 			operations: createOverlayGrepOps(overlayFs),
 		}),
-		generate_image: createImageGenTool(apiKey, overlayFs, mountPoint, imageState),
+		add_visual: createImageGenTool(apiKey, overlayFs, mountPoint, imageState),
 	};
 
 	const agent = new Agent({
