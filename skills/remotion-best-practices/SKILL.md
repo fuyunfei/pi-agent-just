@@ -1,6 +1,6 @@
 ---
 name: remotion-best-practices
-description: "ALWAYS read this before writing or reviewing any Remotion .tsx code. Contains authoritative rules for animations, transitions, sequencing, 3D, GIFs, text layout, audio, and video."
+description: Remotion best practices — animations, transitions, sequencing, 3D, GIFs, text layout, audio and video. Read when writing or reviewing Remotion .tsx code.
 metadata:
   tags: remotion, video, react, animation, composition
 ---
