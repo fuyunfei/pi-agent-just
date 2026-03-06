@@ -210,7 +210,9 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	const playerRef = useRef<PlayerRef>(null);
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [playing, setPlaying] = useState(true);
-	const [currentFrame, setCurrentFrame] = useState(0);
+	const frameRef = useRef(0);
+	const timeRef = useRef<HTMLDivElement>(null);
+	const activeSegRef = useRef<HTMLDivElement>(null);
 
 	// Compiled scenes
 	const [compiled, setCompiled] = useState<CompiledScene[]>([]);
@@ -298,7 +300,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 
 	const switchScene = useCallback((nextIndex: number) => {
 		setCurrentIndex(nextIndex);
-		setCurrentFrame(0);
+		frameRef.current = 0;
 	}, []);
 
 	// Listen for scene selection from sidebar or chat
@@ -319,11 +321,26 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		return () => window.removeEventListener("studio:scene-select", handler);
 	}, [compiled, switchScene]);
 
-	// Track frame updates — re-attach when Player remounts (playerKey changes)
+	// Track frame updates — direct DOM mutation to avoid React re-renders at 30fps
 	useEffect(() => {
 		const player = playerRef.current;
 		if (!player) return;
-		const onFrame = (e: { detail: { frame: number } }) => setCurrentFrame(e.detail.frame);
+		const onFrame = (e: { detail: { frame: number } }) => {
+			frameRef.current = e.detail.frame;
+			// Direct DOM updates — no setState
+			const seg = activeSegRef.current;
+			if (seg) {
+				const dur = compiled[sceneIndex]?.config.durationInFrames || 1;
+				seg.style.width = `${(e.detail.frame / dur) * 100}%`;
+			}
+			const timeEl = timeRef.current;
+			if (timeEl) {
+				const { offsets, totalFrames } = sceneOffsets;
+				const globalFrame = offsets[sceneIndex] + e.detail.frame;
+				const fps = compiled[sceneIndex]?.config.fps || 30;
+				timeEl.textContent = `${formatTime(globalFrame, fps)} / ${formatTime(totalFrames, fps)}`;
+			}
+		};
 		const onPlay = () => setPlaying(true);
 		const onPause = () => setPlaying(false);
 		player.addEventListener("frameupdate", onFrame);
@@ -334,7 +351,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			player.removeEventListener("play", onPlay);
 			player.removeEventListener("pause", onPause);
 		};
-	}, [playerKey]);
+	}, [playerKey, compiled, sceneIndex, sceneOffsets]);
 
 	// Remount Player when scene index changes (ensures autoPlay fires for new scene)
 	useEffect(() => {
@@ -451,8 +468,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	if (!current) return null;
 
 	// Progress bar calculations
-	const { offsets, totalFrames } = sceneOffsets;
-	const globalFrame = offsets[sceneIndex] + currentFrame;
+	const { totalFrames } = sceneOffsets;
 	const fps = current.config.fps;
 
 	const sendFixPartial = () => {
@@ -569,22 +585,23 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				>
 					{compiled.map((scene, i) => {
 						const weight = scene.config.durationInFrames / totalFrames;
-						let segProgress = 0;
-						if (i < sceneIndex) segProgress = 1;
-						else if (i === sceneIndex) segProgress = currentFrame / scene.config.durationInFrames;
+						const segProgress = i < sceneIndex ? 1 : 0;
 						return (
 							<div
 								key={scene.filename}
 								className="player-bar-segment"
 								style={{ flex: weight, height: 4, background: "var(--border)", borderRadius: 3, overflow: "hidden", transition: "height 0.15s" }}
 							>
-								<div style={{ width: `${segProgress * 100}%`, height: "100%", background: "#6366f1", borderRadius: 3 }} />
+								<div
+									ref={i === sceneIndex ? activeSegRef : undefined}
+									style={{ width: `${segProgress * 100}%`, height: "100%", background: "#6366f1", borderRadius: 3 }}
+								/>
 							</div>
 						);
 					})}
 				</div>
-				<div style={{ fontSize: 11, fontFamily: "Inter, system-ui", color: "var(--muted-foreground)", flexShrink: 0, whiteSpace: "nowrap" }}>
-					{formatTime(globalFrame, fps)} / {formatTime(totalFrames, fps)}
+				<div ref={timeRef} style={{ fontSize: 11, fontFamily: "Inter, system-ui", color: "var(--muted-foreground)", flexShrink: 0, whiteSpace: "nowrap" }}>
+					{formatTime(0, fps)} / {formatTime(totalFrames, fps)}
 				</div>
 			</div>
 		</div>
