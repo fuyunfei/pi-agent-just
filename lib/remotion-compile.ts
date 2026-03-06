@@ -13,12 +13,19 @@ import {
 	Easing,
 	Img,
 	Sequence,
+	Series,
 	Video,
 	interpolate,
 	interpolateColors,
 	spring,
+	staticFile,
 	useCurrentFrame,
 	useVideoConfig,
+	useCurrentScale,
+	delayRender,
+	continueRender,
+	cancelRender,
+	useDelayRender,
 } from "remotion";
 import * as RemotionShapes from "@remotion/shapes";
 import { Lottie } from "@remotion/lottie";
@@ -34,6 +41,8 @@ import { wipe } from "@remotion/transitions/wipe";
 import { flip } from "@remotion/transitions/flip";
 import { clockWipe } from "@remotion/transitions/clock-wipe";
 import * as THREE from "three";
+import { Gif, getGifDurationInSeconds, preloadGif } from "@remotion/gif";
+import { measureText, fitText, fitTextOnNLines, fillTextBox } from "@remotion/layout-utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -124,6 +133,12 @@ inject("spring", spring);
 inject("Easing", Easing);
 inject("useCurrentFrame", useCurrentFrame);
 inject("useVideoConfig", useVideoConfig);
+inject("staticFile", staticFile);
+inject("useCurrentScale", useCurrentScale);
+inject("delayRender", delayRender);
+inject("continueRender", continueRender);
+inject("cancelRender", cancelRender);
+inject("useDelayRender", useDelayRender);
 
 // Sequence: default layout="none" so it only controls timing, doesn't wrap in AbsoluteFill
 const SequenceNoLayout = React.forwardRef<HTMLDivElement, React.ComponentProps<typeof Sequence>>(
@@ -131,6 +146,7 @@ const SequenceNoLayout = React.forwardRef<HTMLDivElement, React.ComponentProps<t
 );
 SequenceNoLayout.displayName = "Sequence";
 inject("Sequence", SequenceNoLayout);
+inject("Series", Series);
 inject("Img", Img);
 inject("Audio", Audio);
 inject("Video", Video);
@@ -165,6 +181,17 @@ inject("clockWipe", clockWipe);
 
 // Lottie
 inject("Lottie", Lottie);
+
+// GIF
+inject("Gif", Gif);
+inject("getGifDurationInSeconds", getGifDurationInSeconds);
+inject("preloadGif", preloadGif);
+
+// Layout utils
+inject("measureText", measureText);
+inject("fitText", fitText);
+inject("fitTextOnNLines", fitTextOnNLines);
+inject("fillTextBox", fillTextBox);
 
 // 3D
 inject("ThreeCanvas", ThreeCanvas);

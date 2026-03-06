@@ -41,9 +41,15 @@ importers:
       '@remotion/cli':
         specifier: ^4.0.431
         version: 4.0.431(@swc/helpers@0.5.15)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@remotion/gif':
+        specifier: 4.0.431
+        version: 4.0.431(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@remotion/lambda':
         specifier: ^4.0.431
         version: 4.0.431(@remotion/bundler@4.0.431(@swc/helpers@0.5.15)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@swc/helpers@0.5.15)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@remotion/layout-utils':
+        specifier: 4.0.431
+        version: 4.0.431
       '@remotion/lottie':
         specifier: ^4.0.431
         version: 4.0.431(lottie-web@5.13.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -2102,6 +2108,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@remotion/gif@4.0.431':
+    resolution: {integrity: sha512-b/8jo+nrsezfIuD/S6SXc8wp2VX9T9zlt3nCTic/QkkGdWoiUxDxgeF+63v+8yvNF2PEdnYhzM5RA0CpF8vrWw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
   '@remotion/lambda-client@4.0.431':
     resolution: {integrity: sha512-PU60huLxprZwnmUZAoBf+JO2+ThcVK/+GvrzkODkADrTP6v1cuAOm50j9QRogCuPGvR8lXMi1NHBH3n0ykuzSw==}
 
@@ -2109,6 +2121,9 @@ packages:
     resolution: {integrity: sha512-fl2BjZNZGxbBNmEacWIlVtAMo+jYWYK+ZwSrHQo+mmzk+JCPMzaHa4wej4QWXW3nEALXnd6rjTEaG0NOTOuLzA==}
     peerDependencies:
       '@remotion/bundler': 4.0.431
+
+  '@remotion/layout-utils@4.0.431':
+    resolution: {integrity: sha512-EwIkWCKWF/cT3w3ocVa5NtsUPZxk9wQklHFxWiHCSS2Gc6AdVd43ilYXAwKTWoKVhtZ9Kj9GzzB6EUB53RK7DQ==}
 
   '@remotion/licensing@4.0.431':
     resolution: {integrity: sha512-FOg5gAWB2ewf427y/OoBVbBsGBGvbpzKq8D8v7Q5ZsPmDB80LJ/o5tL6jNutDHo/p6MADQt456HiH+4siJj55Q==}
@@ -9588,6 +9603,12 @@ snapshots:
   '@remotion/compositor-win32-x64-msvc@4.0.431':
     optional: true
 
+  '@remotion/gif@4.0.431(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+      remotion: 4.0.431(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+
   '@remotion/lambda-client@4.0.431': {}
 
   '@remotion/lambda@4.0.431(@remotion/bundler@4.0.431(@swc/helpers@0.5.15)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@swc/helpers@0.5.15)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
@@ -9622,6 +9643,8 @@ snapshots:
       - utf-8-validate
       - webpack-cli
       - webpack-hot-middleware
+
+  '@remotion/layout-utils@4.0.431': {}
 
   '@remotion/licensing@4.0.431': {}
 

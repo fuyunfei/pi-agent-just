@@ -27,6 +27,7 @@ import {
 	type LsOperations,
 	type FindOperations,
 	type GrepOperations,
+	type Skill,
 } from "@mariozechner/pi-coding-agent";
 import { Agent, type AgentToolResult } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
@@ -143,6 +144,7 @@ interface Singleton {
 	skillsEnabled: boolean;
 	imageGenEnabled: boolean;
 	imageModel: string;
+	allSkills: Skill[];
 }
 
 // Persist across Next.js HMR — module-level Map gets wiped on hot reload
@@ -362,7 +364,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: false, imageModel: imageState.model };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: false, imageModel: imageState.model, allSkills: skills };
 	// Wire skillState to entry so toggleSkills can flip it
 	Object.defineProperty(entry, "skillsEnabled", {
 		get: () => skillState.enabled,
@@ -385,12 +387,11 @@ export async function getOrCreateSingleton(sessionId = "default") {
 	return entry;
 }
 
-/** Return available skills for this session. */
+/** Return available skills for this session (always returns all, regardless of enabled state). */
 export function getAvailableSkills(sessionId = "default") {
 	const s = sessions.get(sessionId);
 	if (!s) return [];
-	const { skills } = s.session.resourceLoader.getSkills();
-	return skills.map((sk) => ({
+	return s.allSkills.map((sk) => ({
 		name: sk.name,
 		description: sk.description,
 		filePath: sk.filePath,
