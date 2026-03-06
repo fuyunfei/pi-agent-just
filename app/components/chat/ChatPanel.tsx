@@ -65,6 +65,7 @@ import { SlashCommandMenu, useSlashCommandMenu } from "./SlashCommandMenu";
 import type { ChatMessage, ImageModelInfo, ModelInfo, ThinkingState, ToolCall } from "./types";
 import type { FileUIPart } from "@/components/ai-elements/ai-types";
 import { BrainIcon } from "lucide-react";
+import { SystemPromptButton } from "./SystemPromptEditor";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/app/lib/models";
 
 /* ------------------------------------------------------------------ */
@@ -1115,6 +1116,7 @@ export function ChatPanel() {
 							>
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
+							<SystemPromptButton />
 							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} skillsEnabled={skillsEnabled} onToggleSkills={toggleSkillsEnabled} skillCount={skills.length} imageGenEnabled={imageGenEnabled} onToggleImageGen={toggleImageGen} imageModel={imageModel} onSetImageModel={setImageModel} imageModels={imageModels} />
 						</div>
 						{usage && (

@@ -150,6 +150,11 @@ const sessions: Map<string, Singleton> =
 	(globalThis as Record<string, unknown>).__piSessions as Map<string, Singleton>
 	?? ((globalThis as Record<string, unknown>).__piSessions = new Map<string, Singleton>());
 
+// Custom system prompt overrides — per session
+const customSystemPrompts: Map<string, string> =
+	(globalThis as Record<string, unknown>).__piCustomPrompts as Map<string, string>
+	?? ((globalThis as Record<string, unknown>).__piCustomPrompts = new Map<string, string>());
+
 const MAX_SESSIONS = 10;
 const SESSION_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -338,7 +343,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
-		getSystemPrompt: () => buildSystemPrompt({ imageGenEnabled: imageState.enabled }),
+		getSystemPrompt: () => customSystemPrompts.get(sessionId) ?? buildSystemPrompt({ imageGenEnabled: imageState.enabled }),
 		getAppendSystemPrompt: () => [],
 		getPathMetadata: () => new Map(),
 		extendResources: () => {},
@@ -490,6 +495,30 @@ export async function compactSession(sessionId = "default") {
 		summary: result.summary,
 		tokensBefore: result.tokensBefore,
 	};
+}
+
+/** Get the current system prompt (custom override or default). */
+export function getSystemPrompt(sessionId = "default"): { prompt: string; isCustom: boolean } {
+	const custom = customSystemPrompts.get(sessionId);
+	if (custom) return { prompt: custom, isCustom: true };
+	// Look up imageGenEnabled from the session if it exists
+	const s = sessions.get(sessionId);
+	return { prompt: buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? true }), isCustom: false };
+}
+
+/** Set a custom system prompt override. */
+export function setSystemPrompt(sessionId = "default", prompt: string): void {
+	customSystemPrompts.set(sessionId, prompt);
+	console.log(`[agent] custom system prompt set session=${sessionId.slice(0, 8)} (${prompt.length} chars)`);
+}
+
+/** Clear custom system prompt, revert to default. */
+export function resetSystemPrompt(sessionId = "default"): string {
+	customSystemPrompts.delete(sessionId);
+	const s = sessions.get(sessionId);
+	const defaultPrompt = buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? true });
+	console.log(`[agent] system prompt reset to default session=${sessionId.slice(0, 8)}`);
+	return defaultPrompt;
 }
 
 /** Return user project files (only files under mountPoint, not system dirs). */

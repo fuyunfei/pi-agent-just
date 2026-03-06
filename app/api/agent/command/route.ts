@@ -1,8 +1,8 @@
-import { compactSession, getFullSessionStats, getAvailableSkills, getOrCreateSingleton, getSessionId, toggleSkills, isSkillsEnabled, toggleImageGen, isImageGenEnabled, setImageModel, getImageModel, IMAGE_MODELS } from "../singleton";
+import { compactSession, getFullSessionStats, getAvailableSkills, getOrCreateSingleton, getSessionId, toggleSkills, isSkillsEnabled, toggleImageGen, isImageGenEnabled, setImageModel, getImageModel, IMAGE_MODELS, getSystemPrompt, setSystemPrompt, resetSystemPrompt } from "../singleton";
 
 export async function POST(req: Request) {
 	const sid = getSessionId(req);
-	const { command, model: requestModel } = await req.json();
+	const { command, model: requestModel, systemPrompt: requestPrompt } = await req.json();
 
 	if (command === "session") {
 		const stats = getFullSessionStats(sid);
@@ -61,6 +61,24 @@ export async function POST(req: Request) {
 		await getOrCreateSingleton(sid);
 		const current = setImageModel(sid, requestModel);
 		return Response.json({ ok: true, command: "set-image-model", model: current });
+	}
+
+	if (command === "get-system-prompt") {
+		const result = getSystemPrompt(sid);
+		return Response.json({ ok: true, command: "get-system-prompt", ...result });
+	}
+
+	if (command === "set-system-prompt") {
+		if (typeof requestPrompt !== "string") {
+			return Response.json({ ok: false, error: "Missing systemPrompt parameter" }, { status: 400 });
+		}
+		setSystemPrompt(sid, requestPrompt);
+		return Response.json({ ok: true, command: "set-system-prompt" });
+	}
+
+	if (command === "reset-system-prompt") {
+		const prompt = resetSystemPrompt(sid);
+		return Response.json({ ok: true, command: "reset-system-prompt", prompt });
 	}
 
 	return Response.json({ ok: false, error: `Unknown command: ${command}` }, { status: 400 });
