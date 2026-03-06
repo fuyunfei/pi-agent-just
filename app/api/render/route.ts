@@ -33,7 +33,7 @@ async function inlineImages(code: string, overlayFs: OverlayFs): Promise<string>
 	// Deduplicate matches — same path may appear multiple times
 	const seen = new Set<string>();
 	const matches: { full: string; relativePath: string }[] = [];
-	code.replace(/\/?(img\/.+?\.(png|jpe?g|webp|gif))/g, (full, relativePath) => {
+	code.replace(/\/?(img\/.+?\.(png|jpe?g|webp|gif)),?/g, (full, relativePath) => {
 		if (!seen.has(full)) {
 			seen.add(full);
 			matches.push({ full, relativePath });
