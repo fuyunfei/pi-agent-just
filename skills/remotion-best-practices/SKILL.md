@@ -1,6 +1,6 @@
 ---
 name: remotion-best-practices
-description: Remotion best practices — animations, transitions, sequencing, 3D, GIFs, text layout, audio and video. Read when writing or reviewing Remotion .tsx code.
+description: Best practices for Remotion - Video creation in React
 metadata:
   tags: remotion, video, react, animation, composition
 ---
@@ -41,12 +41,10 @@ Read individual rule files for detailed explanations and code examples:
 
 - [rules/3d.md](rules/3d.md) - 3D content in Remotion using Three.js and React Three Fiber
 - [rules/animations.md](rules/animations.md) - Fundamental animation skills for Remotion
-- [rules/assets.md](rules/assets.md) - Importing images, videos, audio, and fonts into Remotion
-- [rules/audio.md](rules/audio.md) - Using audio and sound in Remotion - importing, trimming, volume, speed, pitch
+- [rules/audio.md](rules/audio.md) - Using audio in Remotion - trimming, volume, speed, pitch
 - [rules/charts.md](rules/charts.md) - Chart and data visualization patterns for Remotion
-- [rules/display-captions.md](rules/display-captions.md) - Displaying captions in Remotion with TikTok-style pages and word highlighting
-- [rules/gifs.md](rules/gifs.md) - Displaying GIFs synchronized with Remotion's timeline
-- [rules/images.md](rules/images.md) - Embedding images in Remotion using the Img component
+- [rules/gifs.md](rules/gifs.md) - Displaying GIFs and animated images in Remotion
+- [rules/images.md](rules/images.md) - Embedding images using the Img component
 - [rules/lottie.md](rules/lottie.md) - Embedding Lottie animations in Remotion
 - [rules/measuring-dom-nodes.md](rules/measuring-dom-nodes.md) - Measuring DOM element dimensions in Remotion
 - [rules/measuring-text.md](rules/measuring-text.md) - Measuring text dimensions, fitting text to containers, and checking overflow
