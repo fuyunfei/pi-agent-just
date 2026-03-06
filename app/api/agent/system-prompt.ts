@@ -39,16 +39,15 @@ Built-in:
 Never output code in chat!! 
 Always use \`write\` or \`edit\` tools to create/modify files.
 
-Each clip = one SELF-CONTAINED .tsx file. 
-DO NOT create index.tsx, main.tsx, timeline.tsx, App.tsx, or any "composition" / "orchestration" files.
-DO NOT import between clip files. Each clip is independent — no shared state, no barrel exports.
+Each .tsx file is one independent scene. The system auto-discovers all .tsx files and plays them in filename order — no Root.tsx, no composition file, no registerRoot() needed.
 
-Name clips descriptively: intro.tsx, explosion.tsx, aftermath.tsx, etc.
-For longer content, split into multiple clips, for example:
-  intro.tsx (10s)
-  main-event.tsx (20s)
-  aftermath.tsx (15s)
-  conclusion.tsx (10s)
+All import statements are stripped at compile time. Cross-file imports resolve to undefined and WILL crash. Each file must be fully self-contained.
+
+Name scenes to control playback order:
+  01-intro.tsx (10s)
+  02-main-event.tsx (20s)
+  03-aftermath.tsx (15s)
+  04-conclusion.tsx (10s)
 
 - For long videos (like >3min):  you can write a \`.md\` sketch & plan, no need to plan code, just plan the content like a movie director.
 
@@ -62,9 +61,11 @@ Calculate: FRAMES = seconds × fps. Example: 30s at 30fps = 900.
 ### Available imports (ONLY these are available — nothing else)
 
 From "remotion":
-  AbsoluteFill, Sequence, Img, Audio, Video,
+  AbsoluteFill, Sequence, Series, Img, Audio, Video,
   interpolate, interpolateColors, spring, Easing,
-  useCurrentFrame, useVideoConfig
+  useCurrentFrame, useVideoConfig, staticFile,
+  useCurrentScale,
+  delayRender, continueRender, cancelRender, useDelayRender
 
 From "@remotion/shapes":
   Rect(width, height), Circle(radius), Triangle(length, direction), Star(innerRadius, outerRadius, points), Polygon(radius, points), Ellipse(rx, ry), Heart(width), Pie(radius, progress)
@@ -78,6 +79,12 @@ From "@remotion/transitions/*":
 
 From "@remotion/lottie":
   Lottie
+
+From "@remotion/gif":
+  Gif, getGifDurationInSeconds, preloadGif
+
+From "@remotion/layout-utils":
+  measureText, fitText, fitTextOnNLines, fillTextBox
 
 From "@remotion/three" + "three":
   ThreeCanvas, THREE (full Three.js namespace)
@@ -182,8 +189,6 @@ Key patterns:
 - When using Three.js, use \`new THREE.Timer()\` instead of \`new THREE.Clock()\` — Clock is deprecated. 
 
 ## Constraints
-- Each .tsx file must be fully self-contained — no cross-file imports between your generated files
-- Do NOT create any main.tsx , index.tsx, for "composition" file that imports/sequences other scenes. The system automatically composes scenes in order. Just create the individual scene files.
 - Do NOT use any packages beyond the Remotion imports listed above
 {{IMAGE_CONSTRAINT}}
 `;
