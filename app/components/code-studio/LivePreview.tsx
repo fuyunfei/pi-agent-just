@@ -299,6 +299,12 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	}, [sceneIndex]);
 
 	const switchScene = useCallback((nextIndex: number) => {
+		// Reset previous active segment width (DOM was mutated directly, React doesn't know)
+		// Also null the ref so in-flight frameupdate events can't write to it before re-render
+		if (activeSegRef.current) {
+			activeSegRef.current.style.width = "0%";
+			activeSegRef.current = null;
+		}
 		setCurrentIndex(nextIndex);
 		frameRef.current = 0;
 	}, []);
@@ -425,7 +431,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			if (globalTargetFrame < accumFrames + sceneDur || i === compiled.length - 1) {
 				const targetFrame = Math.min(globalTargetFrame - accumFrames, sceneDur - 1);
 				if (i !== sceneIndex) {
-					setCurrentIndex(i);
+					switchScene(i);
 					setTimeout(() => playerRef.current?.seekTo(targetFrame), 50);
 				} else {
 					playerRef.current?.seekTo(targetFrame);
@@ -434,7 +440,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			}
 			accumFrames += sceneDur;
 		}
-	}, [compiled, sceneIndex, sceneOffsets.totalFrames]);
+	}, [compiled, sceneIndex, sceneOffsets.totalFrames, switchScene]);
 
 	if (!PlayerComp) {
 		return (
