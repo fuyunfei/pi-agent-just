@@ -29,8 +29,8 @@ import {
 	type GrepOperations,
 	type Skill,
 } from "@mariozechner/pi-coding-agent";
-import { Agent, type AgentToolResult } from "@mariozechner/pi-agent-core";
-import { getModel } from "@mariozechner/pi-ai";
+import { Agent, type AgentMessage, type AgentToolResult } from "@mariozechner/pi-agent-core";
+import { getModel, type ToolResultMessage } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 // Pure in-memory sandbox — empty tmp dir as OverlayFs root (nothing on disk)
 const SANDBOX_ROOT = mkdtempSync(join(tmpdir(), "pi-sandbox-"));
@@ -118,6 +118,90 @@ function createOverlayGrepOps(fs: OverlayFs): GrepOperations {
 			return s.isDirectory;
 		},
 		readFile: async (p: string) => await fs.readFile(p),
+	};
+}
+
+// ---------------------------------------------------------------------------
+// transformContext — summarize completed tool results + inject project state
+// ---------------------------------------------------------------------------
+
+/** Scan OverlayFs for .tsx scenes, extract duration from @remotion config comment. */
+function getProjectState(fs: OverlayFs, mountPoint: string): string {
+	const changes = fs.getOverlayChanges();
+	const prefix = mountPoint.endsWith("/") ? mountPoint : `${mountPoint}/`;
+	const scenes: { name: string; seconds: number }[] = [];
+
+	for (const c of changes) {
+		if (!c.path.startsWith(prefix) || !c.path.endsWith(".tsx")) continue;
+		const rel = c.path.slice(prefix.length);
+		if (rel.startsWith("skills/")) continue;
+		// Read first line to parse config
+		let seconds = 0;
+		try {
+			const content = c.content;
+			if (typeof content === "string") {
+				const match = content.match(/\/\/\s*@remotion\s+fps:(\d+)\s+duration:(\d+)/);
+				if (match) {
+					seconds = Math.round(parseInt(match[2]) / parseInt(match[1]));
+				}
+			}
+		} catch { /* skip */ }
+		scenes.push({ name: rel, seconds });
+	}
+
+	if (scenes.length === 0) return "";
+
+	scenes.sort((a, b) => a.name.localeCompare(b.name));
+	const total = scenes.reduce((sum, s) => sum + s.seconds, 0);
+	const list = scenes.map((s) => `  ${s.name} (${s.seconds}s)`).join("\n");
+	return `[Project state: ${scenes.length} scene${scenes.length > 1 ? "s" : ""}, ${total}s total]\n${list}`;
+}
+
+/** Summarize completed write/edit tool results to save context space. */
+function createTransformContext(fs: OverlayFs, mountPoint: string) {
+	return async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
+		// Inject project state as a synthetic message at the start
+		const projectState = getProjectState(fs, mountPoint);
+
+		const transformed = messages.map((msg) => {
+			// Only transform toolResult messages for write/edit tools
+			if (!msg || typeof msg !== "object") return msg;
+			const m = msg as ToolResultMessage;
+			if (m.role !== "toolResult") return msg;
+			if (m.toolName !== "write" && m.toolName !== "edit") return msg;
+			if (m.isError) return msg;
+
+			// Extract text content
+			const textParts = m.content
+				?.filter((c) => c.type === "text")
+				.map((c) => (c as { type: "text"; text: string }).text)
+				.join("") ?? "";
+
+			// Only summarize if content is large (> 500 chars means it likely has full file code in context)
+			if (textParts.length < 500) return msg;
+
+			// Create summarized version
+			return {
+				...m,
+				content: [{ type: "text" as const, text: `[${m.toolName} completed — file content omitted from context, use read tool to view]` }],
+			};
+		});
+
+		// Inject project state into the last user message (avoids breaking user/assistant alternation)
+		if (projectState) {
+			for (let i = transformed.length - 1; i >= 0; i--) {
+				const m = transformed[i] as { role: string; content: unknown };
+				if (m?.role === "user" && Array.isArray(m.content)) {
+					transformed[i] = {
+						...transformed[i]!,
+						content: [{ type: "text" as const, text: projectState }, ...m.content],
+					} as AgentMessage;
+					break;
+				}
+			}
+		}
+
+		return transformed;
 	};
 }
 
@@ -320,6 +404,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		},
 		sessionId: `web-${Date.now()}`,
 		getApiKey: async () => apiKey,
+		transformContext: createTransformContext(overlayFs, mountPoint),
 	});
 
 	const sessionDir = join(tmpdir(), `pi-session-${sessionId.slice(0, 8)}`);

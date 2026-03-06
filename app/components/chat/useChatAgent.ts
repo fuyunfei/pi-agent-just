@@ -548,6 +548,12 @@ export function useChatAgent() {
 
 	const stop = useCallback(() => {
 		abortRef.current?.abort();
+		// Also abort the server-side agent to stop wasting tokens
+		fetch("/api/sandbox", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "stop" }),
+		}).catch(() => { /* best effort */ });
 	}, []);
 
 	const clearChat = useCallback(() => {

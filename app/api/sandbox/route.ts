@@ -2,7 +2,7 @@
  * Sandbox API — list user project files, clear session, delete file.
  *
  * GET  /api/sandbox → list files under mountPoint
- * POST /api/sandbox → { action: "clear" | "delete" }
+ * POST /api/sandbox → { action: "clear" | "delete" | "stop" }
  */
 
 import { getOrCreateSingleton, getSessionId, clearSingleton, getUserFiles } from "../agent/singleton";
@@ -28,6 +28,15 @@ export async function POST(req: Request) {
 		const sid = getSessionId(req);
 		const body = await req.json();
 		const { action } = body;
+
+		if (action === "stop") {
+			const s = await getOrCreateSingleton(sid);
+			if (s.session.isStreaming) {
+				await s.session.abort();
+				console.log(`[sandbox] abort agent session=${sid.slice(0, 8)}`);
+			}
+			return Response.json({ ok: true });
+		}
 
 		if (action === "clear") {
 			await clearSingleton(sid);

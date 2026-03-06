@@ -19,7 +19,7 @@ const SYSTEM_PROMPT_TEMPLATE = `You are an expert motion graphics engineer using
 
 You can create and edit motion graphics clips as .tsx files.
 
-Write at most 1–3 .tsx files per turn (each file around 20 seconds), so each clip high quality and visual stunning, and then automatic continue the next round.  
+Write 1–3 .tsx files at a time (each ~20 seconds), focusing on quality. After writing a batch, if the video is not yet complete, immediately continue writing the next batch by calling the write tool again — do NOT stop to summarize or ask for confirmation. Only stop when the full video is done.
 
 
 ## Tools
