@@ -937,18 +937,22 @@ export function ChatPanel() {
 		return () => window.removeEventListener("skill:load", handler);
 	}, [send]);
 
-	// Listen for retry-scene from error scene cards
+	// Listen for retry-scene from auto-fix or error scene cards
 	useEffect(() => {
 		const handler = (e: Event) => {
-			const { filename, error, type } = (e as CustomEvent).detail || {};
+			const { filename, error, type, regenerate } = (e as CustomEvent).detail || {};
 			if (filename && error) {
 				const sceneLabel = filename.replace(/\.(tsx|jsx|ts|js)$/, "").replace(/^scene-\d+-/, "");
 				const friendlyName = sceneLabel ? sceneLabel.charAt(0).toUpperCase() + sceneLabel.slice(1) : filename;
-				const prefix = type === "runtime"
-					? `${filename} throws a runtime error when playing. Read the file, find the bug, and fix it with the edit tool.`
-					: `${filename} has a compilation error and cannot render. Read the file, find the syntax issue, and fix it with the edit tool.`;
-				const fullText = `${prefix}\n\nError:\n${error}`;
-				const displayText = `Fix "${friendlyName}"`;
+
+				let fullText: string;
+				if (regenerate) {
+					fullText = `The previous approach for ${filename} keeps failing. Rewrite it with a completely different implementation.\n\nLast error: ${error}`;
+				} else {
+					const verb = type === "runtime" ? "runtime error" : "compilation error";
+					fullText = `Fix ${verb} in ${filename}\n\nError: ${error}`;
+				}
+				const displayText = regenerate ? `Regenerate "${friendlyName}"` : `Fix "${friendlyName}"`;
 				send(fullText, undefined, displayText);
 			}
 		};

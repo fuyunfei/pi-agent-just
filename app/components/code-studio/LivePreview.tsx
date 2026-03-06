@@ -394,23 +394,56 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		iconTimerRef.current = setTimeout(() => setShowPlayIcon(null), 600);
 	}, [playing]);
 
-	const [runtimeError, setRuntimeError] = useState<string | null>(null);
+	const [autoFixing, setAutoFixing] = useState(false);
+	const retryCountRef = useRef<Record<string, number>>({});
+	const MAX_RETRIES = 2;
+
+	/** Clean error message: first line only, max 200 chars */
+	const cleanError = useCallback((err: string) => err.split("\n")[0].slice(0, 200), []);
+
+	/** Dispatch error to AI for auto-fix */
+	const dispatchAutoFix = useCallback((filename: string, error: string, type: "runtime" | "compile") => {
+		const key = `${filename}:${type}`;
+		const count = (retryCountRef.current[key] || 0) + 1;
+		retryCountRef.current[key] = count;
+
+		setAutoFixing(true);
+		if (count > MAX_RETRIES) {
+			// After 2 failed retries, ask AI to regenerate with a different approach
+			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+				detail: { filename, error: cleanError(error), type, regenerate: true },
+			}));
+		} else {
+			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+				detail: { filename, error: cleanError(error), type },
+			}));
+		}
+	}, [cleanError]);
+
+	// Use ref so errorFallback doesn't need to depend on current/scenes
+	const currentFilenameRef = useRef(current?.filename || scenes[0]?.filename || "scene");
+	useEffect(() => {
+		currentFilenameRef.current = current?.filename || scenes[0]?.filename || "scene";
+	}, [current?.filename, scenes]);
 
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
 		({ error: err }: { error: Error }) => {
-			// Propagate error to state so we can render clickable overlay outside pointerEvents:none
-			setTimeout(() => setRuntimeError(err.message), 0);
+			setTimeout(() => dispatchAutoFix(currentFilenameRef.current, err.message, "runtime"), 0);
 			return (
 				<div style={{ ...fill, background: "#1a1a2e" }} />
 			);
 		},
-		[],
+		[dispatchAutoFix],
 	);
 
-	// Clear runtime error on scene change or recompile
+	// Clear autoFixing on scene change; reset retry counts on successful recompile
 	useEffect(() => {
-		setRuntimeError(null);
-	}, [sceneIndex, playerKey]);
+		setAutoFixing(false);
+		// Successful compile = clear retry counts for all keys
+		if (compiled.length > 0) {
+			retryCountRef.current = {};
+		}
+	}, [sceneIndex, playerKey, compiled.length]);
 
 	// Click on progress bar to seek — calculate which segment and position
 	const barRef = useRef<HTMLDivElement>(null);
@@ -442,6 +475,32 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}
 	}, [compiled, sceneIndex, sceneOffsets.totalFrames, switchScene]);
 
+	// Auto-fix compilation errors silently
+	const compileFixDispatchedRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (compiled.length === 0 && error && compileFixDispatchedRef.current !== error) {
+			compileFixDispatchedRef.current = error;
+			const fn = scenes[0]?.filename || "scene";
+			dispatchAutoFix(fn, error, "compile");
+		}
+		if (compiled.length > 0) {
+			compileFixDispatchedRef.current = null;
+		}
+	}, [compiled.length, error, scenes, dispatchAutoFix]);
+
+	// Auto-fix partial errors silently
+	const partialFixDispatchedRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (compiled.length > 0 && error && partialFixDispatchedRef.current !== error) {
+			partialFixDispatchedRef.current = error;
+			const fn = scenes[0]?.filename || "scene";
+			dispatchAutoFix(fn, error, "compile");
+		}
+		if (!error) {
+			partialFixDispatchedRef.current = null;
+		}
+	}, [compiled.length, error, scenes, dispatchAutoFix]);
+
 	if (!PlayerComp) {
 		return (
 			<div style={{ ...fill, display: "flex", alignItems: "center", justifyContent: "center" }} className="studio-surface studio-dim text-sm">
@@ -451,22 +510,10 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	}
 
 	if (compiled.length === 0 && error) {
-		const sendFix = () => {
-			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename: scenes[0]?.filename || "scene", error, type: "compile" },
-			}));
-		};
 		return (
-			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }} className="studio-surface">
-				<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "Inter, system-ui" }}>Compilation Error</div>
-				<div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word", whiteSpace: "pre-wrap", maxHeight: 120, overflow: "auto" }}>{error}</div>
-				<button
-					type="button"
-					onClick={sendFix}
-					className="error-fix-button"
-				>
-					Ask AI to fix
-				</button>
+			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }} className="studio-surface">
+				<div className="auto-fix-shimmer" style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--muted)" }} />
+				<div style={{ fontSize: 13, fontFamily: "Inter, system-ui", color: "var(--muted-foreground)" }}>Fixing...</div>
 			</div>
 		);
 	}
@@ -476,14 +523,6 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	// Progress bar calculations
 	const { totalFrames } = sceneOffsets;
 	const fps = current.config.fps;
-
-	const sendFixPartial = () => {
-		if (error) {
-			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename: scenes[0]?.filename || "scene", error, type: "compile" },
-			}));
-		}
-	};
 
 	return (
 		<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} className="studio-surface">
@@ -496,50 +535,16 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				}}
 				onClick={togglePlay}
 			>
-				{/* Partial error overlay — inside the video */}
-				{error && (
+				{/* Auto-fixing indicator — subtle shimmer overlay */}
+				{autoFixing && (
 					<div
-						onClick={(e) => e.stopPropagation()}
 						style={{
-							position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 20,
-							padding: "8px 12px", display: "flex", alignItems: "center", gap: 8,
-							fontSize: 11, fontFamily: "monospace", color: "#ff6b6b",
-							background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)",
+							position: "absolute", inset: 0, zIndex: 20, pointerEvents: "none",
+							display: "flex", alignItems: "center", justifyContent: "center",
+							background: "rgba(10,10,30,0.6)",
 						}}
 					>
-						<span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{error}</span>
-						<button
-							type="button"
-							onClick={sendFixPartial}
-							className="error-fix-button-sm"
-						>
-							Fix
-						</button>
-					</div>
-				)}
-				{/* Runtime error overlay — outside pointerEvents:none player wrapper */}
-				{runtimeError && (
-					<div
-						onClick={(e) => e.stopPropagation()}
-						style={{
-							position: "absolute", inset: 0, zIndex: 20,
-							display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
-							background: "rgba(10,10,30,0.92)", backdropFilter: "blur(4px)",
-						}}
-					>
-						<div style={{ color: "#ff6b6b", fontSize: 14, fontFamily: "Inter, system-ui" }}>Runtime Error</div>
-						<div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", textAlign: "center", maxWidth: "80%", wordBreak: "break-word", whiteSpace: "pre-wrap", maxHeight: 100, overflow: "auto" }}>{runtimeError}</div>
-						<button
-							type="button"
-							onClick={() => {
-								window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-									detail: { filename: current?.filename || "scene", error: runtimeError, type: "runtime" },
-								}));
-							}}
-							className="error-fix-button"
-						>
-							Ask AI to fix
-						</button>
+						<div className="auto-fix-shimmer" style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(99,102,241,0.3)" }} />
 					</div>
 				)}
 				{/* Play/Pause indicator */}
