@@ -179,6 +179,7 @@ Key patterns:
 - All constants (colors, text, timing) defined INSIDE the component body
 - Do NOT use any packages beyond the imports listed above
 - Helper components (scenes) defined as \`const SceneName = () => { ... }\` outside the main export
+- When using Three.js, use \`new THREE.Timer()\` instead of \`new THREE.Clock()\` — Clock is deprecated. 
 
 ## Constraints
 - Each .tsx file must be fully self-contained — no cross-file imports between your generated files

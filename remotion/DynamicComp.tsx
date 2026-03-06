@@ -89,7 +89,7 @@ interface CompiledScene {
 function Watermark() {
 	return (
 		<AbsoluteFill style={{ pointerEvents: "none", justifyContent: "flex-end", alignItems: "flex-end", padding: 24 }}>
-			<Img src={staticFile("logo.svg")} style={{ width: 36, opacity: 0.15 }} />
+			<Img src={staticFile("logo.svg")} style={{ width: 36, opacity: 0.3, mixBlendMode: "difference" }} />
 		</AbsoluteFill>
 	);
 }
