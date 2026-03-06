@@ -333,7 +333,8 @@ export async function getOrCreateSingleton(sessionId = "default") {
 
 	// Load bundled skills into OverlayFs (e.g. remotion best practices)
 	const skills = await loadBundledSkills(overlayFs, mountPoint);
-	const skillState = { enabled: false };
+	// Skills on by default — this sandbox is Remotion-focused
+	const skillState = { enabled: skills.length > 0 };
 
 	const resourceLoader = {
 		getExtensions: () => ({

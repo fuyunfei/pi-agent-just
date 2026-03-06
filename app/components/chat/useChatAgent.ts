@@ -28,7 +28,7 @@ export function useChatAgent() {
 	const [thinking, setThinking] = useState<ThinkingState>({ level: "medium", available: [], supported: false });
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
 	const [skills, setSkills] = useState<SkillInfo[]>([]);
-	const [skillsEnabled, setSkillsEnabled] = useState(false);
+	const [skillsEnabled, setSkillsEnabled] = useState(true);
 	const [imageGenEnabled, setImageGenEnabled] = useState(false);
 	const [imageModel, setImageModelState] = useState("");
 	const [imageModels, setImageModels] = useState<ImageModelInfo[]>([]);
