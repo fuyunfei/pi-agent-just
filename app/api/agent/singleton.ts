@@ -333,8 +333,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 
 	// Load bundled skills into OverlayFs (e.g. remotion best practices)
 	const skills = await loadBundledSkills(overlayFs, mountPoint);
-	// Skills on by default — this sandbox is Remotion-focused
-	const skillState = { enabled: skills.length > 0 };
+	const skillState = { enabled: false };
 
 	const resourceLoader = {
 		getExtensions: () => ({
@@ -404,6 +403,8 @@ export function toggleSkills(sessionId = "default"): boolean {
 	const s = sessions.get(sessionId);
 	if (!s) return false;
 	s.skillsEnabled = !s.skillsEnabled;
+	// Trigger system prompt rebuild so AgentSession picks up the new getSkills() result
+	s.session.setActiveToolsByName(s.session.getActiveToolNames());
 	console.log(`[agent] skills ${s.skillsEnabled ? "enabled" : "disabled"} session=${sessionId.slice(0, 8)}`);
 	return s.skillsEnabled;
 }
