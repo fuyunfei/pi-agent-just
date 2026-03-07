@@ -371,15 +371,6 @@ noscript pre {
   background: var(--muted-foreground);
 }
 
-/* Auto-fix shimmer indicator */
-.auto-fix-shimmer {
-  animation: auto-fix-pulse 1.5s ease-in-out infinite;
-}
-@keyframes auto-fix-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-
 @keyframes player-icon-fade {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.4); }

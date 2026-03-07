@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { SandpackClient } from "@codesandbox/sandpack-client";
 import type { PlayerRef } from "@remotion/player";
 import type { BundledLanguage } from "shiki";
@@ -185,9 +186,121 @@ function ensureEntry(files: Record<string, { code: string }>, activeFilePath: st
 	return files;
 }
 
+// ---------------------------------------------------------------------------
+// Tailwind CDN + Google Fonts — injected into the Player iframe only
+// ---------------------------------------------------------------------------
+const GOOGLE_FONTS_URL =
+	"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap";
+const TAILWIND_CDN_URL = "https://cdn.tailwindcss.com";
+
+/**
+ * Renders @remotion/player inside an iframe via createPortal for CSS isolation.
+ * Tailwind CDN + Google Fonts are loaded inside the iframe so AI-generated
+ * Tailwind classes work without polluting the host page styles.
+ */
+function IframePlayer({
+	playerRef,
+	PlayerComp,
+	playerKey,
+	current,
+	fps,
+	loop,
+	errorFallback,
+}: {
+	playerRef: React.RefObject<PlayerRef | null>;
+	PlayerComp: typeof import("@remotion/player").Player;
+	playerKey: number;
+	current: { Component: React.ComponentType; config: { durationInFrames: number } };
+	fps: number;
+	loop: boolean;
+	errorFallback: import("@remotion/player").ErrorFallback;
+}) {
+	const iframeRef = useRef<HTMLIFrameElement>(null);
+	const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+	useEffect(() => {
+		const iframe = iframeRef.current;
+		if (!iframe) return;
+
+		const onLoad = () => {
+			const doc = iframe.contentDocument;
+			if (!doc) return;
+
+			// Reset iframe styles — full height chain so % heights work
+			doc.documentElement.style.height = "100%";
+			doc.documentElement.style.margin = "0";
+			doc.body.style.height = "100%";
+			doc.body.style.margin = "0";
+			doc.body.style.padding = "0";
+			doc.body.style.overflow = "hidden";
+			doc.body.style.background = "transparent";
+
+			// Inject Google Fonts
+			const fontLink = doc.createElement("link");
+			fontLink.rel = "stylesheet";
+			fontLink.href = GOOGLE_FONTS_URL;
+			doc.head.appendChild(fontLink);
+
+			// Inject Tailwind CDN
+			const tw = doc.createElement("script");
+			tw.src = TAILWIND_CDN_URL;
+			doc.head.appendChild(tw);
+
+			// Create mount point
+			let root = doc.getElementById("player-root");
+			if (!root) {
+				root = doc.createElement("div");
+				root.id = "player-root";
+				root.style.width = "100%";
+				root.style.height = "100%";
+				doc.body.appendChild(root);
+			}
+			setMountNode(root);
+		};
+
+		iframe.addEventListener("load", onLoad);
+		// If already loaded (cached), trigger manually
+		if (iframe.contentDocument?.readyState === "complete") onLoad();
+
+		return () => iframe.removeEventListener("load", onLoad);
+	}, []);
+
+	return (
+		<>
+			<iframe
+				ref={iframeRef}
+				title="Remotion Player"
+				style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+				srcDoc="<!DOCTYPE html><html><head></head><body></body></html>"
+			/>
+			{mountNode && createPortal(
+				<PlayerComp
+					ref={playerRef}
+					key={playerKey}
+					component={current.Component}
+					durationInFrames={current.config.durationInFrames}
+					fps={fps}
+					compositionHeight={1080}
+					compositionWidth={1920}
+					style={{ width: "100%", height: "100%" }}
+					autoPlay
+					loop={loop}
+					errorFallback={errorFallback}
+				/>,
+				mountNode,
+			)}
+		</>
+	);
+}
+
 interface RemotionScene {
 	filename: string;
 	code: string;
+}
+
+/** Clean error message: first line only, max 200 chars */
+function cleanError(err: string): string {
+	return err.split("\n")[0].slice(0, 200);
 }
 
 /** Format frame count as mm:ss */
@@ -394,56 +507,28 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		iconTimerRef.current = setTimeout(() => setShowPlayIcon(null), 600);
 	}, [playing]);
 
-	const [autoFixing, setAutoFixing] = useState(false);
-	const retryCountRef = useRef<Record<string, number>>({});
-	const MAX_RETRIES = 2;
+	// Runtime error captured from Player's errorFallback
+	const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
-	/** Clean error message: first line only, max 200 chars */
-	const cleanError = useCallback((err: string) => err.split("\n")[0].slice(0, 200), []);
-
-	/** Dispatch error to AI for auto-fix */
-	const dispatchAutoFix = useCallback((filename: string, error: string, type: "runtime" | "compile") => {
-		const key = `${filename}:${type}`;
-		const count = (retryCountRef.current[key] || 0) + 1;
-		retryCountRef.current[key] = count;
-
-		setAutoFixing(true);
-		if (count > MAX_RETRIES) {
-			// After 2 failed retries, ask AI to regenerate with a different approach
-			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename, error: cleanError(error), type, regenerate: true },
-			}));
-		} else {
-			window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-				detail: { filename, error: cleanError(error), type },
-			}));
-		}
-	}, [cleanError]);
-
-	// Use ref so errorFallback doesn't need to depend on current/scenes
-	const currentFilenameRef = useRef(current?.filename || scenes[0]?.filename || "scene");
-	useEffect(() => {
-		currentFilenameRef.current = current?.filename || scenes[0]?.filename || "scene";
-	}, [current?.filename, scenes]);
-
+	const runtimeErrorRef = useRef<string | null>(null);
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
 		({ error: err }: { error: Error }) => {
-			setTimeout(() => dispatchAutoFix(currentFilenameRef.current, err.message, "runtime"), 0);
+			if (runtimeErrorRef.current !== err.message) {
+				runtimeErrorRef.current = err.message;
+				setRuntimeError(err.message);
+			}
 			return (
 				<div style={{ ...fill, background: "#1a1a2e" }} />
 			);
 		},
-		[dispatchAutoFix],
+		[],
 	);
 
-	// Clear autoFixing on scene change; reset retry counts on successful recompile
+	// Clear runtime error on recompile or scene switch
 	useEffect(() => {
-		setAutoFixing(false);
-		// Successful compile = clear retry counts for all keys
-		if (compiled.length > 0) {
-			retryCountRef.current = {};
-		}
-	}, [sceneIndex, playerKey, compiled.length]);
+		runtimeErrorRef.current = null;
+		setRuntimeError(null);
+	}, [compiledKey, sceneIndex]);
 
 	// Click on progress bar to seek — calculate which segment and position
 	const barRef = useRef<HTMLDivElement>(null);
@@ -475,31 +560,16 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}
 	}, [compiled, sceneIndex, sceneOffsets.totalFrames, switchScene]);
 
-	// Auto-fix compilation errors silently
-	const compileFixDispatchedRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (compiled.length === 0 && error && compileFixDispatchedRef.current !== error) {
-			compileFixDispatchedRef.current = error;
-			const fn = scenes[0]?.filename || "scene";
-			dispatchAutoFix(fn, error, "compile");
-		}
-		if (compiled.length > 0) {
-			compileFixDispatchedRef.current = null;
-		}
-	}, [compiled.length, error, scenes, dispatchAutoFix]);
-
-	// Auto-fix partial errors silently
-	const partialFixDispatchedRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (compiled.length > 0 && error && partialFixDispatchedRef.current !== error) {
-			partialFixDispatchedRef.current = error;
-			const fn = scenes[0]?.filename || "scene";
-			dispatchAutoFix(fn, error, "compile");
-		}
-		if (!error) {
-			partialFixDispatchedRef.current = null;
-		}
-	}, [compiled.length, error, scenes, dispatchAutoFix]);
+	// Unified fix dispatch — user clicks button, sends one message to agent
+	const sendFix = useCallback(() => {
+		const errMsg = runtimeError || error;
+		if (!errMsg) return;
+		const type = runtimeError ? "runtime" : "compile";
+		const filename = current?.filename || scenes[0]?.filename || "scene";
+		window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+			detail: { filename, error: cleanError(errMsg), type },
+		}));
+	}, [runtimeError, error, current?.filename, scenes]);
 
 	if (!PlayerComp) {
 		return (
@@ -512,8 +582,17 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	if (compiled.length === 0 && error) {
 		return (
 			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }} className="studio-surface">
-				<div className="auto-fix-shimmer" style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--muted)" }} />
-				<div style={{ fontSize: 13, fontFamily: "Inter, system-ui", color: "var(--muted-foreground)" }}>Fixing...</div>
+				<button
+					type="button"
+					onClick={sendFix}
+					style={{
+						padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
+						background: "rgba(99,102,241,0.15)", color: "#818cf8",
+						border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
+					}}
+				>
+					Ask AI to fix
+				</button>
 			</div>
 		);
 	}
@@ -535,16 +614,27 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				}}
 				onClick={togglePlay}
 			>
-				{/* Auto-fixing indicator — subtle shimmer overlay */}
-				{autoFixing && (
+				{/* Error overlay — runtime or partial compile */}
+				{(runtimeError || error) && (
 					<div
+						onClick={(e) => e.stopPropagation()}
 						style={{
-							position: "absolute", inset: 0, zIndex: 20, pointerEvents: "none",
+							position: "absolute", inset: 0, zIndex: 20,
 							display: "flex", alignItems: "center", justifyContent: "center",
-							background: "rgba(10,10,30,0.6)",
+							background: "rgba(10,10,30,0.7)", backdropFilter: "blur(4px)",
 						}}
 					>
-						<div className="auto-fix-shimmer" style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(99,102,241,0.3)" }} />
+						<button
+							type="button"
+							onClick={sendFix}
+							style={{
+								padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
+								background: "rgba(99,102,241,0.15)", color: "#818cf8",
+								border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
+							}}
+						>
+							Ask AI to fix
+						</button>
 					</div>
 				)}
 				{/* Play/Pause indicator */}
@@ -570,16 +660,12 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				{/* Watermark */}
 				<img src="/logo.svg" alt="" style={{ position: "absolute", bottom: 12, right: 12, width: 24, opacity: 0.3, mixBlendMode: "difference", pointerEvents: "none", zIndex: 5 }} />
 				<div style={{ width: "100%", height: "100%", pointerEvents: "none" }}>
-					<PlayerComp
-						ref={playerRef}
-						key={playerKey}
-						component={current.Component}
-						durationInFrames={current.config.durationInFrames}
+					<IframePlayer
+						playerRef={playerRef}
+						PlayerComp={PlayerComp}
+						playerKey={playerKey}
+						current={current}
 						fps={fps}
-						compositionHeight={1080}
-						compositionWidth={1920}
-						style={{ width: "100%", height: "100%" }}
-						autoPlay
 						loop={compiled.length <= 1}
 						errorFallback={errorFallback}
 					/>
