@@ -591,7 +591,7 @@ export function getSystemPrompt(sessionId = "default"): { prompt: string; isCust
 	if (custom) return { prompt: custom, isCustom: true };
 	// Look up imageGenEnabled from the session if it exists
 	const s = sessions.get(sessionId);
-	return { prompt: buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? true }), isCustom: false };
+	return { prompt: buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? false }), isCustom: false };
 }
 
 /** Set a custom system prompt override. */

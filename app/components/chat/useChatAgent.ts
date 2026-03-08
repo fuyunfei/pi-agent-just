@@ -252,7 +252,7 @@ export function useChatAgent() {
 			// Wait for mount clear to finish
 			if (!clearDone) {
 				await new Promise<void>((r) => {
-					const check = () => clearDone ? r() : setTimeout(check, 30);
+					const check = () => (clearDone || abortRef.current?.signal.aborted) ? r() : setTimeout(check, 30);
 					check();
 				});
 			}

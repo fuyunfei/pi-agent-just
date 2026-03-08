@@ -441,12 +441,12 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	}, [compiled, switchScene]);
 
 	// Track frame updates — direct DOM mutation to avoid React re-renders at 30fps
+	// Uses rAF polling to wait for playerRef (set asynchronously via iframe portal)
 	useEffect(() => {
-		const player = playerRef.current;
-		if (!player) return;
+		let cancelled = false;
+		let player: PlayerRef | null = null;
 		const onFrame = (e: { detail: { frame: number } }) => {
 			frameRef.current = e.detail.frame;
-			// Direct DOM updates — no setState
 			const seg = activeSegRef.current;
 			if (seg) {
 				const dur = compiled[sceneIndex]?.config.durationInFrames || 1;
@@ -462,13 +462,22 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		};
 		const onPlay = () => setPlaying(true);
 		const onPause = () => setPlaying(false);
-		player.addEventListener("frameupdate", onFrame);
-		player.addEventListener("play", onPlay);
-		player.addEventListener("pause", onPause);
+		const tryAttach = () => {
+			if (cancelled) return;
+			player = playerRef.current;
+			if (!player) { requestAnimationFrame(tryAttach); return; }
+			player.addEventListener("frameupdate", onFrame);
+			player.addEventListener("play", onPlay);
+			player.addEventListener("pause", onPause);
+		};
+		tryAttach();
 		return () => {
-			player.removeEventListener("frameupdate", onFrame);
-			player.removeEventListener("play", onPlay);
-			player.removeEventListener("pause", onPause);
+			cancelled = true;
+			if (player) {
+				player.removeEventListener("frameupdate", onFrame);
+				player.removeEventListener("play", onPlay);
+				player.removeEventListener("pause", onPause);
+			}
 		};
 	}, [playerKey, compiled, sceneIndex, sceneOffsets]);
 
@@ -478,21 +487,31 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		setPlayerKey(keyRef.current);
 	}, [sceneIndex]);
 
-	// Auto-advance on scene end — with crossfade
+	// Auto-advance on scene end
 	useEffect(() => {
-		const player = playerRef.current;
-		if (!player) return;
+		let cancelled = false;
+		let player: PlayerRef | null = null;
 		const onEnded = () => {
 			const next = sceneIndex < compiled.length - 1 ? sceneIndex + 1 : 0;
 			switchScene(next);
 		};
-		player.addEventListener("ended", onEnded);
-		return () => player.removeEventListener("ended", onEnded);
+		const tryAttach = () => {
+			if (cancelled) return;
+			player = playerRef.current;
+			if (!player) { requestAnimationFrame(tryAttach); return; }
+			player.addEventListener("ended", onEnded);
+		};
+		tryAttach();
+		return () => {
+			cancelled = true;
+			if (player) player.removeEventListener("ended", onEnded);
+		};
 	}, [sceneIndex, compiled.length, playerKey, switchScene]);
 
 	// Click video to toggle play/pause with visual feedback
 	const [showPlayIcon, setShowPlayIcon] = useState<"play" | "pause" | null>(null);
 	const iconTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+	useEffect(() => () => clearTimeout(iconTimerRef.current), []);
 	const togglePlay = useCallback(() => {
 		const player = playerRef.current;
 		if (!player) return;
