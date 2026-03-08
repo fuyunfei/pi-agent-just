@@ -22,8 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Tailwind CDN for AI-generated Remotion components */}
-        <script src="https://cdn.tailwindcss.com" />
+        {/* Tailwind CDN is injected by DynamicComp.tsx only in Remotion render context */}
         {/* Google Fonts for AI-generated scenes */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

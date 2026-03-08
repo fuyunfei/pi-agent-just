@@ -65,7 +65,14 @@ function injectHeadResources(): Promise<void> {
 		if (!document.querySelector('script[src*="tailwindcss"]')) {
 			const script = document.createElement("script");
 			script.src = TAILWIND_CDN_URL;
-			script.onload = tick;
+			script.onload = () => {
+				// Undo CDN preflight's `button { color: inherit }` which
+				// breaks @layer-based utility classes on button elements
+				const fix = document.createElement("style");
+				fix.textContent = "button { color: revert-layer; }";
+				document.head.appendChild(fix);
+				tick();
+			};
 			script.onerror = tick;
 			document.head.appendChild(script);
 		} else {
