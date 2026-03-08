@@ -32,6 +32,7 @@ export function useChatAgent() {
 	const [imageGenEnabled, setImageGenEnabled] = useState(false);
 	const [imageModel, setImageModelState] = useState("");
 	const [imageModels, setImageModels] = useState<ImageModelInfo[]>([]);
+	const [searchEnabled, setSearchEnabled] = useState(false);
 	const historyRef = useRef<UIMessage[]>([]);
 	const abortRef = useRef<AbortController | null>(null);
 
@@ -97,6 +98,20 @@ export function useChatAgent() {
 					setImageModelState(data.model);
 					if (data.availableModels) setImageModels(data.availableModels);
 				}
+			})
+			.catch(() => {});
+	}, []);
+
+	// Fetch web search status on mount
+	useEffect(() => {
+		fetch("/api/agent/command", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ command: "search-status" }),
+		})
+			.then((r) => r.json())
+			.then((data) => {
+				if (data.ok) setSearchEnabled(data.enabled);
 			})
 			.catch(() => {});
 	}, []);
@@ -637,6 +652,20 @@ export function useChatAgent() {
 		}
 	}, []);
 
+	const toggleSearch = useCallback(async () => {
+		try {
+			const res = await fetch("/api/agent/command", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ command: "toggle-search" }),
+			});
+			const data = await res.json();
+			if (data.ok) setSearchEnabled(data.enabled);
+		} catch {
+			// Toggle failed
+		}
+	}, []);
+
 	const setImageModel = useCallback(async (model: string) => {
 		setImageModelState(model);
 		try {
@@ -650,5 +679,5 @@ export function useChatAgent() {
 		}
 	}, []);
 
-	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled, imageGenEnabled, imageModel, imageModels, toggleImageGen, setImageModel };
+	return { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled, imageGenEnabled, imageModel, imageModels, toggleImageGen, setImageModel, searchEnabled, toggleSearch };
 }

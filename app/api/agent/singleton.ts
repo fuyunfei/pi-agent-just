@@ -228,6 +228,7 @@ interface Singleton {
 	skillsEnabled: boolean;
 	imageGenEnabled: boolean;
 	imageModel: string;
+	searchEnabled: boolean;
 	allSkills: Skill[];
 }
 
@@ -264,6 +265,67 @@ function evictSessions() {
 			sessions.delete(oldestId);
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Web search tool
+// ---------------------------------------------------------------------------
+
+function createWebSearchTool(apiKey: string, searchState: { enabled: boolean }) {
+	return {
+		name: "web_search",
+		label: "Web Search",
+		description: "Search the web for real-time information, current events, latest docs, prices, or any facts you're unsure about. Returns a concise summary with source URLs.",
+		parameters: Type.Object({
+			query: Type.String({ description: "Search query" }),
+		}),
+		async execute(
+			_toolCallId: string,
+			params: { query: string },
+			signal?: AbortSignal,
+		): Promise<AgentToolResult<Record<string, unknown>>> {
+			if (!searchState.enabled) {
+				return { content: [{ type: "text", text: "Web search is currently disabled." }], details: {} };
+			}
+			const searchModel = "google/gemini-3.1-flash-lite-preview:online";
+			const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+				method: "POST",
+				signal,
+				headers: {
+					"Authorization": `Bearer ${apiKey}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					model: searchModel,
+					messages: [{
+						role: "user",
+						content: `Search for: ${params.query}\n\nReturn concise bullet points with source URLs. No commentary.`,
+					}],
+				}),
+			});
+			if (!res.ok) {
+				const err = await res.text();
+				return { content: [{ type: "text", text: `Web search failed: ${err}` }], details: {} };
+			}
+			const data = await res.json();
+			const content = data.choices?.[0]?.message?.content as string | undefined;
+			if (!content) {
+				return { content: [{ type: "text", text: "No search results" }], details: {} };
+			}
+			// Extract annotations if available
+			const annotations = data.choices?.[0]?.message?.annotations as Array<{
+				type: string;
+				url_citation?: { url: string; title: string };
+			}> | undefined;
+			const sources = annotations
+				?.filter((a) => a.type === "url_citation" && a.url_citation)
+				.map((a) => `${a.url_citation!.title}: ${a.url_citation!.url}`)
+				.join("\n") || "";
+			const result = sources ? `${content}\n\nSources:\n${sources}` : content;
+			console.log(`[search] query="${params.query.slice(0, 50)}" result=${result.length} chars`);
+			return { content: [{ type: "text", text: result }], details: {} };
+		},
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +433,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 	const modelRegistry = new ModelRegistry(authStorage);
 
 	const imageState = { enabled: false, model: IMAGE_MODELS[0].id };
+	const searchState = { enabled: false };
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const sandboxedTools: Record<string, any> = {
@@ -393,6 +456,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 			operations: createOverlayGrepOps(overlayFs),
 		}),
 		add_visual: createImageGenTool(apiKey, overlayFs, mountPoint, imageState),
+		web_search: createWebSearchTool(apiKey, searchState),
 	};
 
 	const agent = new Agent({
@@ -430,7 +494,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
-		getSystemPrompt: () => customSystemPrompts.get(sessionId) ?? buildSystemPrompt({ imageGenEnabled: imageState.enabled }),
+		getSystemPrompt: () => customSystemPrompts.get(sessionId) ?? buildSystemPrompt({ imageGenEnabled: imageState.enabled, searchEnabled: searchState.enabled }),
 		getAppendSystemPrompt: () => [],
 		getPathMetadata: () => new Map(),
 		extendResources: () => {},
@@ -449,7 +513,7 @@ export async function getOrCreateSingleton(sessionId = "default") {
 		extensionRunnerRef: {},
 	});
 
-	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: false, imageModel: imageState.model, allSkills: skills };
+	const entry: Singleton = { session, sessionManager, overlayFs, lastAccess: Date.now(), skillsEnabled: false, imageGenEnabled: false, imageModel: imageState.model, searchEnabled: false, allSkills: skills };
 	// Wire skillState to entry so toggleSkills can flip it
 	Object.defineProperty(entry, "skillsEnabled", {
 		get: () => skillState.enabled,
@@ -465,6 +529,11 @@ export async function getOrCreateSingleton(sessionId = "default") {
 	Object.defineProperty(entry, "imageModel", {
 		get: () => imageState.model,
 		set: (v: string) => { imageState.model = v; },
+		enumerable: true,
+	});
+	Object.defineProperty(entry, "searchEnabled", {
+		get: () => searchState.enabled,
+		set: (v: boolean) => { searchState.enabled = v; },
 		enumerable: true,
 	});
 	sessions.set(sessionId, entry);
@@ -505,6 +574,8 @@ export function toggleImageGen(sessionId = "default"): boolean {
 	const s = sessions.get(sessionId);
 	if (!s) return false;
 	s.imageGenEnabled = !s.imageGenEnabled;
+	// Trigger system prompt rebuild so AgentSession picks up the new imageGenEnabled state
+	s.session.setActiveToolsByName(s.session.getActiveToolNames());
 	console.log(`[agent] image gen ${s.imageGenEnabled ? "enabled" : "disabled"} session=${sessionId.slice(0, 8)}`);
 	return s.imageGenEnabled;
 }
@@ -528,6 +599,23 @@ export function setImageModel(sessionId = "default", model: string): string {
 export function getImageModel(sessionId = "default"): string {
 	const s = sessions.get(sessionId);
 	return s?.imageModel ?? IMAGE_MODELS[0].id;
+}
+
+/** Toggle web search on/off for a session. Returns new state. */
+export function toggleSearch(sessionId = "default"): boolean {
+	const s = sessions.get(sessionId);
+	if (!s) return false;
+	s.searchEnabled = !s.searchEnabled;
+	// Trigger system prompt rebuild so AgentSession picks up the new searchEnabled state
+	s.session.setActiveToolsByName(s.session.getActiveToolNames());
+	console.log(`[agent] web search ${s.searchEnabled ? "enabled" : "disabled"} session=${sessionId.slice(0, 8)}`);
+	return s.searchEnabled;
+}
+
+/** Check if web search is enabled for a session. */
+export function isSearchEnabled(sessionId = "default"): boolean {
+	const s = sessions.get(sessionId);
+	return s?.searchEnabled ?? false;
 }
 
 /** Return aggregated session stats + context usage (minimal, for footer). */
@@ -591,7 +679,7 @@ export function getSystemPrompt(sessionId = "default"): { prompt: string; isCust
 	if (custom) return { prompt: custom, isCustom: true };
 	// Look up imageGenEnabled from the session if it exists
 	const s = sessions.get(sessionId);
-	return { prompt: buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? false }), isCustom: false };
+	return { prompt: buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? false, searchEnabled: s?.searchEnabled ?? false }), isCustom: false };
 }
 
 /** Set a custom system prompt override. */
@@ -604,7 +692,7 @@ export function setSystemPrompt(sessionId = "default", prompt: string): void {
 export function resetSystemPrompt(sessionId = "default"): string {
 	customSystemPrompts.delete(sessionId);
 	const s = sessions.get(sessionId);
-	const defaultPrompt = buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? true });
+	const defaultPrompt = buildSystemPrompt({ imageGenEnabled: s?.imageGenEnabled ?? true, searchEnabled: s?.searchEnabled ?? false });
 	console.log(`[agent] system prompt reset to default session=${sessionId.slice(0, 8)}`);
 	return defaultPrompt;
 }
