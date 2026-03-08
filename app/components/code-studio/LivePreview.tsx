@@ -507,28 +507,25 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		iconTimerRef.current = setTimeout(() => setShowPlayIcon(null), 600);
 	}, [playing]);
 
-	// Runtime error captured from Player's errorFallback
-	const [runtimeError, setRuntimeError] = useState<string | null>(null);
+	const currentFilenameRef = useRef<string | undefined>(current?.filename);
+	currentFilenameRef.current = current?.filename;
 
-	const runtimeErrorRef = useRef<string | null>(null);
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
-		({ error: err }: { error: Error }) => {
-			if (runtimeErrorRef.current !== err.message) {
-				runtimeErrorRef.current = err.message;
-				setRuntimeError(err.message);
-			}
-			return (
-				<div style={{ ...fill, background: "#1a1a2e" }} />
-			);
-		},
+		({ error: err }: { error: Error }) => (
+			<div style={{ ...fill, background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center" }}>
+				<button type="button" onClick={() => {
+					window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+						detail: { filename: currentFilenameRef.current || "scene", error: err.message.split("\n")[0].slice(0, 200), type: "runtime" },
+					}));
+				}} style={{
+					padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
+					background: "rgba(99,102,241,0.15)", color: "#818cf8",
+					border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
+				}}>Ask AI to fix</button>
+			</div>
+		),
 		[],
 	);
-
-	// Clear runtime error on recompile or scene switch
-	useEffect(() => {
-		runtimeErrorRef.current = null;
-		setRuntimeError(null);
-	}, [compiledKey, sceneIndex]);
 
 	// Click on progress bar to seek — calculate which segment and position
 	const barRef = useRef<HTMLDivElement>(null);
@@ -560,16 +557,14 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}
 	}, [compiled, sceneIndex, sceneOffsets.totalFrames, switchScene]);
 
-	// Unified fix dispatch — user clicks button, sends one message to agent
+	// Compile error fix dispatch (runtime errors handled inside errorFallback)
 	const sendFix = useCallback(() => {
-		const errMsg = runtimeError || error;
-		if (!errMsg) return;
-		const type = runtimeError ? "runtime" : "compile";
+		if (!error) return;
 		const filename = current?.filename || scenes[0]?.filename || "scene";
 		window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-			detail: { filename, error: cleanError(errMsg), type },
+			detail: { filename, error: cleanError(error), type: "compile" },
 		}));
-	}, [runtimeError, error, current?.filename, scenes]);
+	}, [error, current?.filename, scenes]);
 
 	if (!PlayerComp) {
 		return (
@@ -614,8 +609,8 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				}}
 				onClick={togglePlay}
 			>
-				{/* Error overlay — runtime or partial compile */}
-				{(runtimeError || error) && (
+				{/* Compile error overlay (runtime errors handled inside Player's errorFallback) */}
+				{error && (
 					<div
 						onClick={(e) => e.stopPropagation()}
 						style={{
