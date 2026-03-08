@@ -52,6 +52,7 @@ import {
 	PlayIcon,
 	RocketIcon,
 	RotateCcwIcon,
+	SearchIcon,
 	ShoppingBagIcon,
 	SparklesIcon,
 	TerminalIcon,
@@ -133,6 +134,7 @@ const TOOL_LABELS: Record<string, string> = {
 	find: "Finding…",
 	ls: "Listing…",
 	add_visual: "Generating image…",
+	web_search: "Searching web…",
 };
 
 function toolDisplayInfo(tool: ToolCall): ToolDisplay {
@@ -219,6 +221,15 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 		return {
 			icon: <ImageIcon className="size-3.5" />,
 			label: short || "Generating image…",
+		};
+	}
+
+	if (name === "web_search") {
+		const query = String(args.query || "");
+		const short = query.length > 50 ? `${query.slice(0, 47)}...` : query;
+		return {
+			icon: <SearchIcon className="size-3.5" />,
+			label: short || "Searching…",
 		};
 	}
 
@@ -716,7 +727,7 @@ const THINKING_LABELS: Record<string, string> = {
 	xhigh: "Max",
 };
 
-function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, skillsEnabled, onToggleSkills, skillCount, imageGenEnabled, onToggleImageGen, imageModel, onSetImageModel, imageModels }: {
+function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, skillsEnabled, onToggleSkills, skillCount, imageGenEnabled, onToggleImageGen, imageModel, onSetImageModel, imageModels, searchEnabled, onToggleSearch }: {
 	models: ModelInfo[];
 	current: ModelInfo | null;
 	onSwitch: (provider: string, id: string) => void;
@@ -730,6 +741,8 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 	imageModel: string;
 	onSetImageModel: (model: string) => void;
 	imageModels: ImageModelInfo[];
+	searchEnabled: boolean;
+	onToggleSearch: () => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const active = current || DEFAULT_MODEL;
@@ -766,6 +779,12 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 						<span className="flex items-center gap-1 text-brand-clay/60">
 							<span className="text-[9px]">·</span>
 							<ImageIcon className="size-3" />
+						</span>
+					)}
+					{searchEnabled && (
+						<span className="flex items-center gap-1 text-brand-clay/60">
+							<span className="text-[9px]">·</span>
+							<SearchIcon className="size-3" />
 						</span>
 					)}
 					<ChevronDownIcon className={cn(
@@ -898,6 +917,23 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 						)}
 					</>
 				)}
+				<div className="mx-2.5 my-1 border-t border-border/20" />
+				<button
+					type="button"
+					onClick={onToggleSearch}
+					className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-left transition-all duration-150 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+				>
+					<SearchIcon className="size-3 flex-shrink-0" />
+					<span className="flex-1">Web Search</span>
+					<span className={cn(
+						"text-[10px] px-1.5 py-0.5 rounded-full transition-all duration-150",
+						searchEnabled
+							? "bg-brand-moss/15 text-brand-moss"
+							: "bg-muted text-muted-foreground/40",
+					)}>
+						{searchEnabled ? "on" : "off"}
+					</span>
+				</button>
 			</PopoverContent>
 		</Popover>
 	);
@@ -908,7 +944,7 @@ function ModelSelector({ models, current, onSwitch, thinking, onSwitchThinking, 
 /* ------------------------------------------------------------------ */
 
 export function ChatPanel() {
-	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled, imageGenEnabled, imageModel, imageModels, toggleImageGen, setImageModel } = useChatAgent();
+	const { messages, status, send, stop, clear, currentModel, switchModel, thinking, switchThinkingLevel, usage, skills, skillsEnabled, toggleSkillsEnabled, imageGenEnabled, imageModel, imageModels, toggleImageGen, setImageModel, searchEnabled, toggleSearch } = useChatAgent();
 	const [confirmClear, setConfirmClear] = useState(false);
 	const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -1121,7 +1157,7 @@ export function ChatPanel() {
 								<PaperclipIcon className="size-3.5" />
 							</PromptInputButton>
 							<SystemPromptButton />
-							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} skillsEnabled={skillsEnabled} onToggleSkills={toggleSkillsEnabled} skillCount={skills.length} imageGenEnabled={imageGenEnabled} onToggleImageGen={toggleImageGen} imageModel={imageModel} onSetImageModel={setImageModel} imageModels={imageModels} />
+							<ModelSelector models={AVAILABLE_MODELS} current={currentModel} onSwitch={switchModel} thinking={thinking} onSwitchThinking={switchThinkingLevel} skillsEnabled={skillsEnabled} onToggleSkills={toggleSkillsEnabled} skillCount={skills.length} imageGenEnabled={imageGenEnabled} onToggleImageGen={toggleImageGen} imageModel={imageModel} onSetImageModel={setImageModel} imageModels={imageModels} searchEnabled={searchEnabled} onToggleSearch={toggleSearch} />
 						</div>
 						{usage && (
 							<div className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">

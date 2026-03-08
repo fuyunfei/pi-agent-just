@@ -1,4 +1,4 @@
-import { compactSession, getFullSessionStats, getAvailableSkills, getOrCreateSingleton, getSessionId, toggleSkills, isSkillsEnabled, toggleImageGen, isImageGenEnabled, setImageModel, getImageModel, IMAGE_MODELS, getSystemPrompt, setSystemPrompt, resetSystemPrompt } from "../singleton";
+import { compactSession, getFullSessionStats, getAvailableSkills, getOrCreateSingleton, getSessionId, toggleSkills, isSkillsEnabled, toggleImageGen, isImageGenEnabled, setImageModel, getImageModel, IMAGE_MODELS, toggleSearch, isSearchEnabled, getSystemPrompt, setSystemPrompt, resetSystemPrompt } from "../singleton";
 
 export async function POST(req: Request) {
 	const sid = getSessionId(req);
@@ -61,6 +61,21 @@ export async function POST(req: Request) {
 		await getOrCreateSingleton(sid);
 		const current = setImageModel(sid, requestModel);
 		return Response.json({ ok: true, command: "set-image-model", model: current });
+	}
+
+	if (command === "search-status") {
+		await getOrCreateSingleton(sid);
+		return Response.json({
+			ok: true,
+			command: "search-status",
+			enabled: isSearchEnabled(sid),
+		});
+	}
+
+	if (command === "toggle-search") {
+		await getOrCreateSingleton(sid);
+		const enabled = toggleSearch(sid);
+		return Response.json({ ok: true, command: "toggle-search", enabled });
 	}
 
 	if (command === "get-system-prompt") {

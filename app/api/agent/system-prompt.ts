@@ -1,4 +1,7 @@
-export function buildSystemPrompt(opts: { imageGenEnabled: boolean } = { imageGenEnabled: true }): string {
+export function buildSystemPrompt(opts: { imageGenEnabled: boolean; searchEnabled?: boolean } = { imageGenEnabled: true, searchEnabled: false }): string {
+	const searchToolLine = opts.searchEnabled
+		? `- web_search: Search the web for real-time info, current events, latest API docs, or facts you're unsure about. Use when the user's request involves recent events, current data, or topics you lack knowledge about.`
+		: "";
 	const imageToolLine = opts.imageGenEnabled
 		? `- add_visual: Add an illustration, photo, or diagram as a foreground content element — DO NOT lazly use img as background for each cilp. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.`
 		: "";
@@ -10,6 +13,7 @@ export function buildSystemPrompt(opts: { imageGenEnabled: boolean } = { imageGe
 		: `- Do NOT use \`<Img>\` or any image URLs. Image generation is disabled.`;
 
 	return SYSTEM_PROMPT_TEMPLATE
+		.replace("{{SEARCH_TOOL_LINE}}", searchToolLine)
 		.replace("{{IMAGE_TOOL_LINE}}", imageToolLine)
 		.replace("{{IMAGE_GUIDELINE}}", imageGuideline)
 		.replace("{{IMAGE_CONSTRAINT}}", imageConstraint);
@@ -32,6 +36,7 @@ Built-in:
 - ls: List directory contents
 - find: Find files by glob pattern
 {{IMAGE_TOOL_LINE}}
+{{SEARCH_TOOL_LINE}}
 
 
 ## Code structure
