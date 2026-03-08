@@ -12,6 +12,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { NextResponse } from "next/server";
 import { REGION } from "../../../../config.mjs";
 
+export const maxDuration = 120;
+
 const FUNCTION_NAME = "pi-concat";
 
 interface ConcatRequest {
@@ -81,8 +83,10 @@ export async function POST(req: Request) {
 			data: { url: result.url, size: result.size },
 		});
 	} catch (err) {
+		const error = err as Error;
+		console.error("[concat] Lambda invocation failed:", error.message, error.stack);
 		return NextResponse.json(
-			{ type: "error", message: (err as Error).message },
+			{ type: "error", message: error.message || "Lambda invocation failed" },
 			{ status: 500 },
 		);
 	}
