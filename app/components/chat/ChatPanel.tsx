@@ -369,34 +369,53 @@ function SceneSkeleton({ label, isEdit }: { label: string; isEdit?: boolean }) {
 	);
 }
 
-/** Error state for a scene cell */
+/** Scene needs a tweak — gentle, non-alarming state */
 function SceneError({ label, onRetry }: { label: string; onRetry: () => void }) {
 	return (
-		<div className="relative rounded-lg overflow-hidden border border-red-500/30" style={{ aspectRatio: "16/9", background: "#1a1020" }}>
+		<div className="relative rounded-lg overflow-hidden border border-border/60" style={{ aspectRatio: "16/9", background: "#1a1a2e" }}>
 			<div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-				<XCircleIcon className="size-5 text-red-400/60" />
-				<button type="button" onClick={onRetry} className="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
-					Ask AI to fix
+				<RotateCcwIcon className="size-4 text-white/30" />
+				<button type="button" onClick={onRetry} className="text-[11px] text-white/50 hover:text-white/80 transition-colors">
+					Retry
 				</button>
 			</div>
-			<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
-				<span className="text-[10px] text-red-400/60 truncate block">{label}</span>
+			<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent px-2.5 pb-2 pt-4">
+				<span className="text-[10px] text-white/40 truncate block">{label}</span>
 			</div>
 		</div>
 	);
 }
 
-/** Completed scene thumbnail — inline live preview */
+/** Completed scene thumbnail — inline live preview with error handling */
 function SceneThumbnail({ scene, onClick }: {
 	scene: { filename: string; code: string };
 	onClick: () => void;
 }) {
+	const [runtimeError, setRuntimeError] = useState<{ filename: string; error: string } | null>(null);
+
+	const handleError = useCallback((filename: string, error: string) => {
+		setRuntimeError({ filename, error });
+	}, []);
+
+	if (runtimeError) {
+		return (
+			<SceneError
+				label={sceneLabel(runtimeError.filename)}
+				onRetry={() => {
+					window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+						detail: { filename: runtimeError.filename, error: runtimeError.error, type: "runtime" },
+					}));
+				}}
+			/>
+		);
+	}
+
 	return (
 		<div
 			className="relative rounded-lg overflow-hidden border border-border/60 group cursor-pointer"
 			onClick={onClick}
 		>
-			<RemotionPreview scenes={[scene]} compact />
+			<RemotionPreview scenes={[scene]} compact onError={handleError} />
 			<button
 				type="button"
 				className="absolute top-1.5 right-1.5 size-6 flex items-center justify-center rounded-md bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"

@@ -318,7 +318,7 @@ interface CompiledScene {
 	code: string;
 }
 
-export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; compact?: boolean }) {
+export function RemotionPreview({ scenes, compact, onError }: { scenes: RemotionScene[]; compact?: boolean; onError?: (filename: string, error: string) => void }) {
 	const [PlayerComp, setPlayerComp] = useState<typeof import("@remotion/player").Player | null>(null);
 	const playerRef = useRef<PlayerRef>(null);
 	const [currentIndex, setCurrentIndex] = useState(0);
@@ -380,7 +380,13 @@ export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; 
 				setCompiled(results);
 				setError(firstError);
 			} else {
-				setError(firstError || "No valid scenes");
+				const errMsg = firstError || "No valid scenes";
+				setError(errMsg);
+				// Notify parent of compile error
+				if (onErrorRef.current) {
+					const fname = scenes[0]?.filename || "scene";
+					onErrorRef.current(fname, cleanError(errMsg));
+				}
 			}
 		};
 
@@ -550,20 +556,32 @@ export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; 
 	const currentFilenameRef = useRef<string | undefined>(current?.filename);
 	currentFilenameRef.current = current?.filename;
 
+	const onErrorRef = useRef(onError);
+	onErrorRef.current = onError;
+
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
-		({ error: err }: { error: Error }) => (
-			<div style={{ ...fill, background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center" }}>
-				<button type="button" onClick={() => {
-					window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-						detail: { filename: currentFilenameRef.current || "scene", error: err.message.split("\n")[0].slice(0, 200), type: "runtime" },
-					}));
-				}} style={{
-					padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
-					background: "rgba(99,102,241,0.15)", color: "#818cf8",
-					border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
-				}}>Ask AI to fix</button>
-			</div>
-		),
+		({ error: err }: { error: Error }) => {
+			const fname = currentFilenameRef.current || "scene";
+			const msg = err.message.split("\n")[0].slice(0, 200);
+			// Notify parent (e.g. SceneThumbnail) so it can show a proper error card
+			if (onErrorRef.current) {
+				// Defer to avoid setState-during-render
+				setTimeout(() => onErrorRef.current?.(fname, msg), 0);
+			}
+			return (
+				<div style={{ ...fill, background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center" }}>
+					<button type="button" onClick={() => {
+						window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+							detail: { filename: fname, error: msg, type: "runtime" },
+						}));
+					}} style={{
+						padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
+						background: "rgba(99,102,241,0.15)", color: "#818cf8",
+						border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
+					}}>Ask AI to fix</button>
+				</div>
+			);
+		},
 		[],
 	);
 
