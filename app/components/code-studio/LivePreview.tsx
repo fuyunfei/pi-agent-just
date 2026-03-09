@@ -357,7 +357,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		import("@remotion/player").then((mod) => setPlayerComp(() => mod.Player));
 	}, []);
 
-	// Debounced compile ALL scenes
+	// Debounced compile ALL scenes (no Player rebuild here — handled separately)
 	useEffect(() => {
 		clearTimeout(debounceRef.current);
 		debounceRef.current = setTimeout(() => {
@@ -378,8 +378,6 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			}
 			if (results.length > 0) {
 				setCompiled(results);
-				keyRef.current += 1;
-				setPlayerKey(keyRef.current);
 				setError(firstError);
 			} else {
 				setError(firstError || "No valid scenes");
@@ -410,6 +408,8 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			detail: { index: sceneIndex },
 		}));
 	}, [sceneIndex]);
+
+	const pendingSeekRef = useRef<number | null>(null);
 
 	const switchScene = useCallback((nextIndex: number) => {
 		// Reset previous active segment width (DOM was mutated directly, React doesn't know)
@@ -469,6 +469,11 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			player.addEventListener("frameupdate", onFrame);
 			player.addEventListener("play", onPlay);
 			player.addEventListener("pause", onPause);
+			// Apply pending seek from cross-scene progress bar click
+			if (pendingSeekRef.current != null) {
+				player.seekTo(pendingSeekRef.current);
+				pendingSeekRef.current = null;
+			}
 		};
 		tryAttach();
 		return () => {
@@ -481,11 +486,16 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		};
 	}, [playerKey, compiled, sceneIndex, sceneOffsets]);
 
-	// Remount Player when scene index changes (ensures autoPlay fires for new scene)
+	// Rebuild Player only when the current scene's code actually changes (or scene switches)
+	const prevSceneCodeRef = useRef<string>("");
 	useEffect(() => {
-		keyRef.current += 1;
-		setPlayerKey(keyRef.current);
-	}, [sceneIndex]);
+		const code = compiled[sceneIndex]?.code ?? "";
+		if (code && code !== prevSceneCodeRef.current) {
+			prevSceneCodeRef.current = code;
+			keyRef.current += 1;
+			setPlayerKey(keyRef.current);
+		}
+	}, [compiled, sceneIndex]);
 
 	// Auto-advance on scene end
 	useEffect(() => {
@@ -565,8 +575,8 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			if (globalTargetFrame < accumFrames + sceneDur || i === compiled.length - 1) {
 				const targetFrame = Math.min(globalTargetFrame - accumFrames, sceneDur - 1);
 				if (i !== sceneIndex) {
+					pendingSeekRef.current = targetFrame;
 					switchScene(i);
-					setTimeout(() => playerRef.current?.seekTo(targetFrame), 50);
 				} else {
 					playerRef.current?.seekTo(targetFrame);
 				}
@@ -696,7 +706,9 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				>
 					{compiled.map((scene, i) => {
 						const weight = scene.config.durationInFrames / totalFrames;
-						const segProgress = i < sceneIndex ? 1 : 0;
+						const segProgress = i < sceneIndex ? 1
+							: i === sceneIndex ? (frameRef.current / (scene.config.durationInFrames || 1))
+							: 0;
 						return (
 							<div
 								key={scene.filename}
