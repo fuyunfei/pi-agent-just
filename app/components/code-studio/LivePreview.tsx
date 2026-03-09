@@ -357,10 +357,10 @@ export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; 
 		import("@remotion/player").then((mod) => setPlayerComp(() => mod.Player));
 	}, []);
 
-	// Debounced compile ALL scenes (no Player rebuild here — handled separately)
+	// Compile scenes — immediate on first mount, debounced on subsequent changes
+	const hasMountedRef = useRef(false);
 	useEffect(() => {
-		clearTimeout(debounceRef.current);
-		debounceRef.current = setTimeout(() => {
+		const doCompile = () => {
 			const results: CompiledScene[] = [];
 			let firstError: string | null = null;
 			for (const scene of scenes) {
@@ -382,7 +382,16 @@ export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; 
 			} else {
 				setError(firstError || "No valid scenes");
 			}
-		}, 600);
+		};
+
+		if (!hasMountedRef.current) {
+			hasMountedRef.current = true;
+			doCompile();
+			return;
+		}
+
+		clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(doCompile, 600);
 		return () => clearTimeout(debounceRef.current);
 	}, [scenesKey]);
 
@@ -474,6 +483,8 @@ export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; 
 				player.seekTo(pendingSeekRef.current);
 				pendingSeekRef.current = null;
 			}
+			// Ensure playback starts (autoPlay may not trigger in iframe portal context)
+			try { player.play(); } catch {}
 		};
 		tryAttach();
 		return () => {

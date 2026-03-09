@@ -348,54 +348,210 @@ const ImageToolCard = memo(function ImageToolCard({
 	);
 });
 
-/** Inline scene preview with click-to-expand lightbox + export dialog */
-function ScenePreviewCard({ scenes, label }: { scenes: { filename: string; code: string }[]; label: string }) {
-	const [expanded, setExpanded] = useState(false);
+/** Loading skeleton for a scene cell — same 16:9 shape as preview */
+function SceneSkeleton({ label, isEdit }: { label: string; isEdit?: boolean }) {
+	return (
+		<div className="relative rounded-lg overflow-hidden border border-border/60" style={{ aspectRatio: "16/9", background: "#1a1a2e" }}>
+			<div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+				<Loader2Icon className="size-5 animate-spin text-white/40" />
+				<span className="text-[11px] text-white/50">{isEdit ? "Updating..." : "Creating..."}</span>
+			</div>
+			<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
+				<span className="text-[10px] text-white/60 truncate block">{label}</span>
+			</div>
+		</div>
+	);
+}
+
+/** Error state for a scene cell */
+function SceneError({ label, onRetry }: { label: string; onRetry: () => void }) {
+	return (
+		<div className="relative rounded-lg overflow-hidden border border-red-500/30" style={{ aspectRatio: "16/9", background: "#1a1020" }}>
+			<div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+				<XCircleIcon className="size-5 text-red-400/60" />
+				<button type="button" onClick={onRetry} className="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
+					Ask AI to fix
+				</button>
+			</div>
+			<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
+				<span className="text-[10px] text-red-400/60 truncate block">{label}</span>
+			</div>
+		</div>
+	);
+}
+
+/** Completed scene thumbnail — static card (no iframe/player overhead) */
+function SceneThumbnail({ scene, onClick }: {
+	scene: { filename: string; code: string };
+	onClick: () => void;
+}) {
+	const duration = useMemo(() => parseSceneDuration(scene.code), [scene.code]);
+	return (
+		<div
+			className="relative rounded-lg overflow-hidden border border-border/60 group cursor-pointer"
+			style={{ aspectRatio: "16/9", background: "#1a1a2e" }}
+			onClick={onClick}
+		>
+			<div className="absolute inset-0 flex items-center justify-center">
+				<div className="size-10 rounded-full bg-white/10 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+					<PlayIcon className="size-4 text-white/80 fill-white/80 ml-0.5" />
+				</div>
+			</div>
+			<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-5">
+				<div className="flex items-center gap-1.5">
+					<span className="text-[11px] text-white/90 truncate flex-1">{sceneLabel(scene.filename)}</span>
+					{duration && <span className="text-[10px] text-white/50">{duration}</span>}
+				</div>
+			</div>
+			<button
+				type="button"
+				className="absolute top-1.5 right-1.5 size-6 flex items-center justify-center rounded-md bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+			>
+				<MaximizeIcon className="size-3" />
+			</button>
+		</div>
+	);
+}
+
+/** Scene cell: renders skeleton, error, or preview based on tool state */
+function SceneCell({ tool, index, onExpand }: { tool: ToolCall; index: number; onExpand: (i: number) => void }) {
+	const display = useMemo(() => toolDisplayInfo(tool), [tool]);
+	const filename = String(tool.args?.path || tool.args?.file_path || "").split("/").pop() || "scene.tsx";
+	const code = String(tool.args?.content || "");
+
+	if (tool.state === "running") {
+		return <SceneSkeleton label={display.label || sceneLabel(filename)} isEdit={display.isEdit} />;
+	}
+
+	if (tool.state === "error") {
+		return (
+			<SceneError
+				label={display.label || sceneLabel(filename)}
+				onRetry={() => {
+					window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+						detail: { filename, error: tool.output },
+					}));
+				}}
+			/>
+		);
+	}
+
+	if (tool.state === "completed" && code) {
+		return (
+			<SceneThumbnail
+				scene={{ filename, code }}
+				onClick={() => onExpand(index)}
+			/>
+		);
+	}
+
+	// Fallback: still waiting for args
+	return <SceneSkeleton label={sceneLabel(filename)} />;
+}
+
+/** Inline scene group with lightbox + export */
+function ScenePreviewCard({ tools }: { tools: ToolCall[] }) {
 	const [exportOpen, setExportOpen] = useState(false);
+	const [lightboxScene, setLightboxScene] = useState<number | "all" | null>(null);
+
+	// Build completed scenes for lightbox/export
+	const completedScenes = useMemo(() =>
+		tools
+			.filter((t) => t.state === "completed" && t.args?.content)
+			.map((t) => ({
+				filename: String(t.args?.path || t.args?.file_path || "").split("/").pop() || "scene.tsx",
+				code: String(t.args.content || ""),
+			})),
+		[tools],
+	);
+
+	const lightboxScenes = lightboxScene === "all"
+		? completedScenes
+		: lightboxScene != null && completedScenes[lightboxScene]
+			? [completedScenes[lightboxScene]]
+			: lightboxScene != null
+				? [completedScenes[0]].filter(Boolean) // fallback
+				: [];
+
+	const isMulti = tools.length > 1;
+	const anyCompleted = completedScenes.length > 0;
+	const label = isMulti ? `${tools.length} scenes` : sceneLabel(
+		String(tools[0]?.args?.path || tools[0]?.args?.file_path || "").split("/").pop() || "scene",
+	);
 
 	return (
 		<>
-			{expanded && (
+			{/* Lightbox */}
+			{lightboxScene != null && lightboxScenes.length > 0 && (
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-zoom-out p-8"
-					onClick={() => setExpanded(false)}
+					onClick={() => setLightboxScene(null)}
 				>
 					<div
 						className="w-full max-w-4xl"
 						style={{ aspectRatio: "16/9" }}
 						onClick={(e) => e.stopPropagation()}
 					>
-						<RemotionPreview scenes={scenes} />
+						<RemotionPreview scenes={lightboxScenes} />
 					</div>
 				</div>
 			)}
-			<ExportDialog open={exportOpen} onOpenChange={setExportOpen} scenes={scenes} />
-			<div className="my-1.5 max-w-md">
-				<div className="relative rounded-xl overflow-hidden border border-border/60 group">
-					<div className="cursor-zoom-in" onClick={() => setExpanded(true)}>
-						<RemotionPreview scenes={scenes} compact />
+			<ExportDialog open={exportOpen} onOpenChange={setExportOpen} scenes={completedScenes} />
+
+			{isMulti ? (
+				<div className="my-1.5" style={{ maxWidth: 480 }}>
+					<div className={cn(
+						"grid gap-2",
+						tools.length === 2 ? "grid-cols-2" : tools.length === 3 ? "grid-cols-3" : "grid-cols-2",
+					)}>
+						{tools.map((tool, i) => (
+							<SceneCell key={tool.id} tool={tool} index={i} onExpand={setLightboxScene} />
+						))}
 					</div>
-					<button
-						type="button"
-						onClick={() => setExpanded(true)}
-						className="absolute top-2 right-2 size-7 flex items-center justify-center rounded-lg bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-					>
-						<MaximizeIcon className="size-3.5" />
-					</button>
+					<div className="flex items-center gap-1.5 mt-1.5 px-1">
+						<FilmIcon className="size-3 text-muted-foreground/50" />
+						<span className="text-[11px] text-muted-foreground/60 flex-1">{label}</span>
+						{completedScenes.length > 1 && (
+							<button
+								type="button"
+								onClick={() => setLightboxScene("all")}
+								className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+							>
+								<PlayIcon className="size-3" />
+								<span>Play all</span>
+							</button>
+						)}
+						{anyCompleted && (
+							<button
+								type="button"
+								onClick={() => setExportOpen(true)}
+								className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+							>
+								<DownloadIcon className="size-3" />
+								<span>Export</span>
+							</button>
+						)}
+					</div>
 				</div>
-				<div className="flex items-center gap-1.5 mt-1 px-1">
-					<FilmIcon className="size-3 text-muted-foreground/50" />
-					<span className="text-[11px] text-muted-foreground/60 flex-1">{label}</span>
-					<button
-						type="button"
-						onClick={() => setExportOpen(true)}
-						className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
-					>
-						<DownloadIcon className="size-3" />
-						<span>Export</span>
-					</button>
+			) : (
+				<div className="my-1.5 max-w-md">
+					<SceneCell tool={tools[0]} index={0} onExpand={setLightboxScene} />
+					<div className="flex items-center gap-1.5 mt-1 px-1">
+						<FilmIcon className="size-3 text-muted-foreground/50" />
+						<span className="text-[11px] text-muted-foreground/60 flex-1">{label}</span>
+						{anyCompleted && (
+							<button
+								type="button"
+								onClick={() => setExportOpen(true)}
+								className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+							>
+								<DownloadIcon className="size-3" />
+								<span>Export</span>
+							</button>
+						)}
+					</div>
 				</div>
-			</div>
+			)}
 		</>
 	);
 }
@@ -615,7 +771,7 @@ const AssistantMessage = memo(function AssistantMessage({
 								);
 							}
 						} else if (!DEV_MODE && part.type === "tool" && isRemotionSceneTool(part.tool)) {
-							// Consumer mode: group consecutive scene tools into one preview
+							// Consumer mode: group consecutive scene tools — always use ScenePreviewCard
 							const sceneGroup: ToolCall[] = [];
 							while (i < msg.parts.length) {
 								const p = msg.parts[i];
@@ -624,31 +780,12 @@ const AssistantMessage = memo(function AssistantMessage({
 									i++;
 								} else break;
 							}
-							const allCompleted = sceneGroup.every((t) => t.state === "completed");
-							const anyRunning = sceneGroup.some((t) => t.state === "running");
-							if (allCompleted) {
-								const scenes = sceneGroup.map((t) => ({
-									filename: String(t.args?.path || t.args?.file_path || "").split("/").pop() || "scene.tsx",
-									code: String(t.args?.content || ""),
-								})).filter((s) => s.code);
-								if (scenes.length > 0) {
-									const label = scenes.length === 1
-														? sceneLabel(scenes[0].filename)
-														: `${scenes.length} scenes`;
-									elements.push(
-										<ScenePreviewCard
-											key={`scene-group-${sceneGroup[0].id}`}
-											scenes={scenes}
-											label={label}
-										/>,
-									);
-								}
-							} else {
-								// Still running — show individual cards
-								for (const t of sceneGroup) {
-									elements.push(<ToolCallCard key={t.id} tool={t} />);
-								}
-							}
+							elements.push(
+								<ScenePreviewCard
+									key={`scene-group-${sceneGroup[0].id}`}
+									tools={sceneGroup}
+								/>,
+							);
 						} else if (part.type === "tool") {
 							const _display = toolDisplayInfo(part.tool);
 							const isVisible = _display.isScene || _display.isSkill
