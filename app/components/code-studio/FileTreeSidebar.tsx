@@ -8,6 +8,7 @@ import { useStudioDispatch, useStudioState } from "./CodeStudioContext";
 import { FileTreeNode } from "./FileTreeNode";
 import { isRemotionCode } from "./remotion-compiler";
 import type { OverlayChange, TreeNode } from "./types";
+import { DEV_MODE } from "@/app/lib/feature-flags";
 
 function buildTree(changes: OverlayChange[], mountPoint: string): TreeNode[] {
 	const root: TreeNode[] = [];
@@ -432,12 +433,12 @@ export function FileTreeSidebar() {
 				)}
 
 				{/* Divider between scenes and files */}
-				{hasScenes && hasOtherFiles && (
+				{DEV_MODE && hasScenes && hasOtherFiles && (
 					<div className="border-t border-border mx-3 my-1" />
 				)}
 
 				{/* Other files section */}
-				{hasOtherFiles && (
+				{DEV_MODE && hasOtherFiles && (
 					<>
 						{hasScenes && (
 							<div className="px-3 py-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex-shrink-0">
@@ -487,7 +488,7 @@ export function FileTreeSidebar() {
 				)}
 
 				{/* Skills section */}
-				{skills.length > 0 && (
+				{DEV_MODE && skills.length > 0 && (
 					<>
 						{(hasScenes || hasOtherFiles) && (
 							<div className="border-t border-border mx-3 my-1" />
@@ -497,9 +498,9 @@ export function FileTreeSidebar() {
 				)}
 
 				{/* Empty state */}
-				{!hasScenes && !hasOtherFiles && skills.length === 0 && (
+				{!hasScenes && (DEV_MODE ? (!hasOtherFiles && skills.length === 0) : true) && (
 					<div className="p-4 text-muted-foreground text-xs text-center">
-						No changes
+						Your scenes will appear here
 					</div>
 				)}
 			</div>

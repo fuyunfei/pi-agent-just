@@ -5,6 +5,7 @@ import { CodeViewer } from "./CodeViewer";
 import { EmptyState } from "./EmptyState";
 import { LivePreview } from "./LivePreview";
 import { getLanguageFromPath } from "./file-icons";
+import { DEV_MODE } from "@/app/lib/feature-flags";
 
 export function ContentArea() {
 	const { tabs, activeTabId, changes, mountPoint, viewMode } = useStudioState();
@@ -23,7 +24,7 @@ export function ContentArea() {
 		);
 	}
 
-	if (viewMode === "preview") {
+	if (viewMode === "preview" || !DEV_MODE) {
 		return <LivePreview content={content} filename={activeTab.name} changes={changes} mountPoint={mountPoint} />;
 	}
 

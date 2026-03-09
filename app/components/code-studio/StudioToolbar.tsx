@@ -12,6 +12,7 @@ import {
 	AlertTriangle, Download, Square, Code, Eye,
 } from "lucide-react";
 import { useRenderQueue, type RenderJob, type ClipRenderState } from "@/app/hooks/use-render-queue";
+import { DEV_MODE } from "@/app/lib/feature-flags";
 
 interface SceneData {
 	code: string;
@@ -499,7 +500,7 @@ export function StudioToolbar() {
 			<div className="flex-1" />
 
 			<div className="flex items-center gap-1 px-2 flex-shrink-0">
-				{activeTabId && (
+				{DEV_MODE && activeTabId && (
 					<Tooltip>
 						<TooltipTrigger asChild>
 							<Button

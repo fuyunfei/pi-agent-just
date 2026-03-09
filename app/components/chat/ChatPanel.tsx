@@ -67,6 +67,7 @@ import type { FileUIPart } from "@/components/ai-elements/ai-types";
 import { BrainIcon } from "lucide-react";
 import { SystemPromptButton } from "./SystemPromptEditor";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/app/lib/models";
+import { DEV_MODE } from "@/app/lib/feature-flags";
 
 /* ------------------------------------------------------------------ */
 /*  Tool call — compact inline card (V0-style)                        */
@@ -553,7 +554,13 @@ const AssistantMessage = memo(function AssistantMessage({
 								);
 							}
 						} else if (part.type === "tool") {
-							elements.push(<ToolCallCard key={part.tool.id} tool={part.tool} />);
+							const _display = toolDisplayInfo(part.tool);
+							const isVisible = _display.isScene || _display.isSkill
+								|| part.tool.toolName === "add_visual"
+								|| part.tool.toolName === "web_search";
+							if (isVisible || DEV_MODE) {
+								elements.push(<ToolCallCard key={part.tool.id} tool={part.tool} />);
+							}
 							i++;
 						} else if (part.text) {
 							elements.push(

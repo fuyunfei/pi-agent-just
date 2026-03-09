@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Monitor, MessageSquare } from "lucide-react";
+import { DEV_MODE } from "@/app/lib/feature-flags";
 
 const CodeStudio = dynamic(() => import("./components/code-studio"), { ssr: false });
 const ChatPanel = dynamic(
@@ -109,7 +110,7 @@ function MobileTabBar({
         }`}
       >
         <Monitor className="size-5" />
-        Studio
+        {DEV_MODE ? "Studio" : "Preview"}
       </button>
     </div>
   );
@@ -168,7 +169,21 @@ export default function Home() {
     );
   }
 
-  // ── Desktop: side-by-side with splitter ──
+  // ── Consumer mode: full-screen preview + chat at bottom ──
+  if (!DEV_MODE) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden" }}>
+        <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+          <CodeStudio style={{ width: "100%", height: "100%", overflow: "hidden" }} />
+        </div>
+        <div style={{ flexShrink: 0, maxHeight: "40vh", overflow: "hidden" }}>
+          <ChatPanel />
+        </div>
+      </div>
+    );
+  }
+
+  // ── DEV_MODE: side-by-side with splitter ──
   const defaultRatio = isSmallDesktop ? 0.45 : 0.6;
   const effectiveWidth = studioWidth ?? (width > 0 ? width * defaultRatio : undefined) ?? "60%";
 
