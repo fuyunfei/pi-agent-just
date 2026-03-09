@@ -50,7 +50,7 @@ All import statements are stripped at compile time. Cross-file imports resolve t
 
 Name scenes to control playback order:
   01-intro.tsx (10s)
-  02-main-event.tsx (20s)
+  02-event.tsx (20s)
   03-aftermath.tsx (15s)
   04-conclusion.tsx (10s)
 
