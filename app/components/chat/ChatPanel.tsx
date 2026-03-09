@@ -95,8 +95,14 @@ function isRemotionSceneTool(tool: ToolCall): boolean {
 	const name = tool.toolName;
 	const hasArgs = Object.keys(tool.args).length > 0;
 
-	// Don't guess during streaming — wait for args to classify correctly
-	if (!hasArgs) return false;
+	// Optimistic: running write/edit tools are tentatively treated as scene tools
+	// so they show a skeleton in consumer mode while streaming
+	if (!hasArgs) {
+		return tool.state === "running" && (
+			name === "write" || name === "writeFile" || name === "createFile" ||
+			name === "edit" || name === "editFile"
+		);
+	}
 
 	if (name === "write" || name === "writeFile" || name === "createFile") {
 		const content = String(tool.args.content || "");
@@ -380,29 +386,17 @@ function SceneError({ label, onRetry }: { label: string; onRetry: () => void }) 
 	);
 }
 
-/** Completed scene thumbnail — static card (no iframe/player overhead) */
+/** Completed scene thumbnail — inline live preview */
 function SceneThumbnail({ scene, onClick }: {
 	scene: { filename: string; code: string };
 	onClick: () => void;
 }) {
-	const duration = useMemo(() => parseSceneDuration(scene.code), [scene.code]);
 	return (
 		<div
 			className="relative rounded-lg overflow-hidden border border-border/60 group cursor-pointer"
-			style={{ aspectRatio: "16/9", background: "#1a1a2e" }}
 			onClick={onClick}
 		>
-			<div className="absolute inset-0 flex items-center justify-center">
-				<div className="size-10 rounded-full bg-white/10 group-hover:bg-white/20 flex items-center justify-center transition-colors">
-					<PlayIcon className="size-4 text-white/80 fill-white/80 ml-0.5" />
-				</div>
-			</div>
-			<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-5">
-				<div className="flex items-center gap-1.5">
-					<span className="text-[11px] text-white/90 truncate flex-1">{sceneLabel(scene.filename)}</span>
-					{duration && <span className="text-[10px] text-white/50">{duration}</span>}
-				</div>
-			</div>
+			<RemotionPreview scenes={[scene]} compact />
 			<button
 				type="button"
 				className="absolute top-1.5 right-1.5 size-6 flex items-center justify-center rounded-md bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
@@ -417,10 +411,12 @@ function SceneThumbnail({ scene, onClick }: {
 function SceneCell({ tool, index, onExpand }: { tool: ToolCall; index: number; onExpand: (i: number) => void }) {
 	const display = useMemo(() => toolDisplayInfo(tool), [tool]);
 	const filename = String(tool.args?.path || tool.args?.file_path || "").split("/").pop() || "scene.tsx";
+	const isEdit = display.isEdit || tool.toolName === "edit" || tool.toolName === "editFile";
+	// write tools have full code in content; edit tools only have old_string/new_string
 	const code = String(tool.args?.content || "");
 
 	if (tool.state === "running") {
-		return <SceneSkeleton label={display.label || sceneLabel(filename)} isEdit={display.isEdit} />;
+		return <SceneSkeleton label={display.label || sceneLabel(filename)} isEdit={isEdit} />;
 	}
 
 	if (tool.state === "error") {
@@ -436,12 +432,31 @@ function SceneCell({ tool, index, onExpand }: { tool: ToolCall; index: number; o
 		);
 	}
 
+	// Completed write tool with full code → show playable thumbnail
 	if (tool.state === "completed" && code) {
 		return (
 			<SceneThumbnail
 				scene={{ filename, code }}
 				onClick={() => onExpand(index)}
 			/>
+		);
+	}
+
+	// Completed edit tool → show "updated" card (no full code available)
+	if (tool.state === "completed" && isEdit) {
+		return (
+			<div
+				className="relative rounded-lg overflow-hidden border border-border/60"
+				style={{ aspectRatio: "16/9", background: "#1a1a2e" }}
+			>
+				<div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+					<CheckCircle2Icon className="size-4 text-green-400/70" />
+					<span className="text-[11px] text-white/60">Updated</span>
+				</div>
+				<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
+					<span className="text-[10px] text-white/60 truncate block">{sceneLabel(filename)}</span>
+				</div>
+			</div>
 		);
 	}
 
@@ -499,25 +514,23 @@ function ScenePreviewCard({ tools }: { tools: ToolCall[] }) {
 			<ExportDialog open={exportOpen} onOpenChange={setExportOpen} scenes={completedScenes} />
 
 			{isMulti ? (
-				<div className="my-1.5" style={{ maxWidth: 480 }}>
+				<div className="my-2">
 					<div className={cn(
 						"grid gap-2",
-						tools.length === 2 ? "grid-cols-2" : tools.length === 3 ? "grid-cols-3" : "grid-cols-2",
-					)}>
+						tools.length <= 2 ? "grid-cols-2" : "grid-cols-3",
+					)} style={{ maxWidth: tools.length <= 2 ? 400 : undefined }}>
 						{tools.map((tool, i) => (
 							<SceneCell key={tool.id} tool={tool} index={i} onExpand={setLightboxScene} />
 						))}
 					</div>
-					<div className="flex items-center gap-1.5 mt-1.5 px-1">
-						<FilmIcon className="size-3 text-muted-foreground/50" />
-						<span className="text-[11px] text-muted-foreground/60 flex-1">{label}</span>
+					<div className="flex items-center gap-2 mt-2">
 						{completedScenes.length > 1 && (
 							<button
 								type="button"
 								onClick={() => setLightboxScene("all")}
-								className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+								className="text-[12px] text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-accent transition-colors"
 							>
-								<PlayIcon className="size-3" />
+								<PlayIcon className="size-3.5 fill-current" />
 								<span>Play all</span>
 							</button>
 						)}
@@ -525,27 +538,25 @@ function ScenePreviewCard({ tools }: { tools: ToolCall[] }) {
 							<button
 								type="button"
 								onClick={() => setExportOpen(true)}
-								className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+								className="text-[12px] text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-accent transition-colors"
 							>
-								<DownloadIcon className="size-3" />
+								<DownloadIcon className="size-3.5" />
 								<span>Export</span>
 							</button>
 						)}
 					</div>
 				</div>
 			) : (
-				<div className="my-1.5 max-w-md">
+				<div className="my-2 max-w-[280px]">
 					<SceneCell tool={tools[0]} index={0} onExpand={setLightboxScene} />
-					<div className="flex items-center gap-1.5 mt-1 px-1">
-						<FilmIcon className="size-3 text-muted-foreground/50" />
-						<span className="text-[11px] text-muted-foreground/60 flex-1">{label}</span>
+					<div className="flex items-center gap-2 mt-1.5">
 						{anyCompleted && (
 							<button
 								type="button"
 								onClick={() => setExportOpen(true)}
-								className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+								className="text-[12px] text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-accent transition-colors"
 							>
-								<DownloadIcon className="size-3" />
+								<DownloadIcon className="size-3.5" />
 								<span>Export</span>
 							</button>
 						)}
