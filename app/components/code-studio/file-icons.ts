@@ -98,35 +98,3 @@ export function isImageFile(path: string): boolean {
 	return IMAGE_EXTENSIONS.has(getExtension(path));
 }
 
-export function isPreviewable(path: string): boolean {
-	const ext = getExtension(path);
-	return (
-		IMAGE_EXTENSIONS.has(ext) ||
-		ext === "html" ||
-		ext === "htm" ||
-		ext === "md" ||
-		ext === "mdx" ||
-		ext === "svg" ||
-		ext === "json" ||
-		ext === "tsx" ||
-		ext === "jsx" ||
-		ext === "ts" ||
-		ext === "js"
-	);
-}
-
-/** Files that should default to preview mode when opened */
-export function shouldDefaultPreview(path: string): boolean {
-	const ext = getExtension(path);
-	return (
-		IMAGE_EXTENSIONS.has(ext) ||
-		ext === "html" ||
-		ext === "htm" ||
-		ext === "svg" ||
-		ext === "md" ||
-		ext === "mdx" ||
-		ext === "json" ||
-		ext === "tsx" ||
-		ext === "jsx"
-	);
-}

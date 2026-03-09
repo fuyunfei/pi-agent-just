@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import {
 	PanelLeft, Film, Loader2, CheckCircle, XCircle, RotateCcw,
-	AlertTriangle, Download, Square,
+	AlertTriangle, Download, Square, Code, Eye,
 } from "lucide-react";
 import { useRenderQueue, type RenderJob, type ClipRenderState } from "@/app/hooks/use-render-queue";
 
@@ -475,7 +475,7 @@ function ExportButton() {
 }
 
 export function StudioToolbar() {
-	const { sidebarOpen } = useStudioState();
+	const { sidebarOpen, activeTabId, viewMode } = useStudioState();
 	const dispatch = useStudioDispatch();
 
 	return (
@@ -499,6 +499,27 @@ export function StudioToolbar() {
 			<div className="flex-1" />
 
 			<div className="flex items-center gap-1 px-2 flex-shrink-0">
+				{activeTabId && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="h-7 w-7"
+								onClick={() => dispatch({ type: "TOGGLE_VIEW_MODE" })}
+							>
+								{viewMode === "preview" ? (
+									<Code className="h-4 w-4" />
+								) : (
+									<Eye className="h-4 w-4" />
+								)}
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">
+							{viewMode === "preview" ? "Show code" : "Show preview"}
+						</TooltipContent>
+					</Tooltip>
+				)}
 				<ExportButton />
 			</div>
 		</div>

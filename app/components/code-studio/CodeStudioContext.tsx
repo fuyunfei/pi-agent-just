@@ -12,7 +12,6 @@ import {
 	useState,
 } from "react";
 import type { OverlayChange, StudioTab } from "./types";
-import { shouldDefaultPreview } from "./file-icons";
 
 type StudioState = {
 	tabs: StudioTab[];
@@ -20,6 +19,7 @@ type StudioState = {
 	sidebarOpen: boolean;
 	changes: OverlayChange[];
 	mountPoint: string;
+	viewMode: "preview" | "code";
 };
 
 export type StudioAction =
@@ -28,7 +28,7 @@ export type StudioAction =
 	| { type: "SET_ACTIVE_TAB"; tabId: string }
 	| { type: "TOGGLE_SIDEBAR" }
 	| { type: "SET_CHANGES"; changes: OverlayChange[]; mountPoint: string }
-	| { type: "TOGGLE_PREVIEW"; tabId: string }
+	| { type: "TOGGLE_VIEW_MODE" }
 	| { type: "CLOSE_ALL_TABS" }
 	| { type: "FILE_WRITTEN"; path: string; name: string };
 
@@ -38,6 +38,7 @@ const initialState: StudioState = {
 	sidebarOpen: false,
 	changes: [],
 	mountPoint: "",
+	viewMode: "preview",
 };
 
 function studioReducer(state: StudioState, action: StudioAction): StudioState {
@@ -52,7 +53,6 @@ function studioReducer(state: StudioState, action: StudioAction): StudioState {
 				id: action.path,
 				path: action.path,
 				name: action.name,
-				mode: shouldDefaultPreview(action.name) ? "preview" : "code",
 			};
 			return {
 				...state,
@@ -99,7 +99,6 @@ function studioReducer(state: StudioState, action: StudioAction): StudioState {
 						id: first.path,
 						path: first.path,
 						name,
-						mode: "preview",
 					};
 					newState = { ...newState, tabs: [...newState.tabs, tab], activeTabId: tab.id };
 				}
@@ -107,19 +106,11 @@ function studioReducer(state: StudioState, action: StudioAction): StudioState {
 			return newState;
 		}
 
-		case "TOGGLE_PREVIEW": {
-			return {
-				...state,
-				tabs: state.tabs.map((t) =>
-					t.id === action.tabId
-						? { ...t, mode: t.mode === "code" ? "preview" : "code" }
-						: t,
-				),
-			};
-		}
+		case "TOGGLE_VIEW_MODE":
+			return { ...state, viewMode: state.viewMode === "preview" ? "code" : "preview" };
 
 		case "CLOSE_ALL_TABS":
-			return { ...state, tabs: [], activeTabId: null };
+			return { ...state, tabs: [], activeTabId: null, viewMode: "preview" };
 
 		default:
 			return state;

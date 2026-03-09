@@ -8,7 +8,6 @@ export type StudioTab = {
 	id: string;
 	path: string;
 	name: string;
-	mode: "code" | "preview";
 };
 
 export type TreeNode = {

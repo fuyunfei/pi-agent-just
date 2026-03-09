@@ -36,7 +36,6 @@ import {
 	BookOpenIcon,
 	BriefcaseIcon,
 	CheckCircle2Icon,
-	CheckIcon,
 	ChevronDownIcon,
 	ClapperboardIcon,
 	FileEditIcon,

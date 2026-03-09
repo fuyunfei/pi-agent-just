@@ -618,11 +618,11 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	const fps = current.config.fps;
 
 	return (
-		<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }} className="studio-surface">
+		<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px 24px" }} className="studio-surface">
 			{/* Video area — click to play/pause */}
 			<div
 				style={{
-					position: "relative", cursor: "pointer", aspectRatio: "16/9", width: "100%", maxWidth: 960,
+					position: "relative", cursor: "pointer", aspectRatio: "16/9", width: "100%", maxWidth: "min(100%, calc(80vh * 16 / 9))",
 					borderRadius: 8, overflow: "hidden", background: "#000",
 					boxShadow: "0 2px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(128,128,128,0.1)",
 				}}
@@ -687,7 +687,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			</div>
 
 			{/* Progress bar + time */}
-			<div style={{ width: "100%", maxWidth: 960, display: "flex", alignItems: "center", gap: 12, padding: "20px 0 8px" }}>
+			<div style={{ width: "100%", maxWidth: "min(100%, calc(80vh * 16 / 9))", display: "flex", alignItems: "center", gap: 12, padding: "20px 0 8px" }}>
 				<div
 					ref={barRef}
 					onClick={handleBarClick}

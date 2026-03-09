@@ -203,8 +203,9 @@ function SceneList({
 	}, [remotionFiles.length]);
 
 	const selectScene = useCallback((index: number) => {
-		if (remotionFiles[0]) {
-			dispatch({ type: "OPEN_FILE", path: remotionFiles[0].path, name: remotionFiles[0].filename });
+		const file = remotionFiles[index] ?? remotionFiles[0];
+		if (file) {
+			dispatch({ type: "OPEN_FILE", path: file.path, name: file.filename });
 		}
 		window.dispatchEvent(new CustomEvent("studio:scene-select", { detail: { index } }));
 	}, [remotionFiles, dispatch]);
