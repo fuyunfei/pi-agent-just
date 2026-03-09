@@ -315,6 +315,18 @@ noscript pre {
   pointer-events: none;
 }
 
+/* Mobile safe area for bottom tab bar */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hide splitter on mobile */
+@media (max-width: 767px) {
+  .splitter-handle {
+    display: none;
+  }
+}
+
 /* Studio markdown preview */
 .studio-markdown {
   color: var(--studio-text);

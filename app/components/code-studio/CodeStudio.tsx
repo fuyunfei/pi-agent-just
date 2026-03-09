@@ -62,7 +62,7 @@ function StudioInner({ style }: { style?: React.CSSProperties }) {
 	return (
 		<div
 			className="flex bg-background text-foreground text-[13px]"
-			style={{ ...style, height: "100dvh", overflow: "hidden" }}
+			style={{ height: "100dvh", overflow: "hidden", ...style }}
 		>
 			<FileTreeSidebar />
 			<div className="relative flex flex-1 flex-col overflow-hidden" style={{ minWidth: 0 }}>
