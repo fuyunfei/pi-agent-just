@@ -318,8 +318,47 @@ interface CompiledScene {
 	code: string;
 }
 
+// ---------------------------------------------------------------------------
+// Module-level caches — shared across all RemotionPreview instances
+// ---------------------------------------------------------------------------
+
+/** Singleton: @remotion/player Player component (loaded once, shared by all) */
+let _playerCompPromise: Promise<typeof import("@remotion/player").Player> | null = null;
+let _playerComp: typeof import("@remotion/player").Player | null = null;
+
+function getPlayerComp(cb: (P: typeof import("@remotion/player").Player) => void) {
+	if (_playerComp) { cb(_playerComp); return; }
+	if (!_playerCompPromise) {
+		_playerCompPromise = import("@remotion/player").then((mod) => {
+			_playerComp = mod.Player;
+			return mod.Player;
+		});
+	}
+	_playerCompPromise.then(cb);
+}
+
+/** Compilation cache — same code → same Component, no redundant Babel work */
+const _compileCache = new Map<string, { Component: React.ComponentType; config: { fps: number; durationInFrames: number } } | { error: string }>();
+
+function compileCached(code: string, filename: string): CompiledScene | { error: string } {
+	const cached = _compileCache.get(code);
+	if (cached) {
+		if ("error" in cached) return cached;
+		return { ...cached, filename, code };
+	}
+	const result = compileRemotionCode(code);
+	if (result.Component) {
+		const config = parseRemotionConfig(code);
+		_compileCache.set(code, { Component: result.Component, config });
+		return { Component: result.Component, config, filename, code };
+	}
+	const entry = { error: result.error || "Compilation failed" };
+	_compileCache.set(code, entry);
+	return entry;
+}
+
 export function RemotionPreview({ scenes, compact, onError }: { scenes: RemotionScene[]; compact?: boolean; onError?: (filename: string, error: string) => void }) {
-	const [PlayerComp, setPlayerComp] = useState<typeof import("@remotion/player").Player | null>(null);
+	const [PlayerComp, setPlayerComp] = useState<typeof import("@remotion/player").Player | null>(_playerComp);
 	const playerRef = useRef<PlayerRef>(null);
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [playing, setPlaying] = useState(true);
@@ -352,28 +391,24 @@ export function RemotionPreview({ scenes, compact, onError }: { scenes: Remotion
 		return { offsets, totalFrames: total };
 	}, [compiled]);
 
-	// Lazy-load @remotion/player
+	// Lazy-load @remotion/player (shared singleton)
 	useEffect(() => {
-		import("@remotion/player").then((mod) => setPlayerComp(() => mod.Player));
-	}, []);
+		if (!PlayerComp) getPlayerComp((P) => setPlayerComp(() => P));
+	}, [PlayerComp]);
 
 	// Compile scenes — immediate on first mount, debounced on subsequent changes
+	// Uses module-level cache so repeated compilations of the same code are free
 	const hasMountedRef = useRef(false);
 	useEffect(() => {
 		const doCompile = () => {
 			const results: CompiledScene[] = [];
 			let firstError: string | null = null;
 			for (const scene of scenes) {
-				const result = compileRemotionCode(scene.code);
-				if (result.Component) {
-					results.push({
-						Component: result.Component,
-						config: parseRemotionConfig(scene.code),
-						filename: scene.filename,
-						code: scene.code,
-					});
-				} else if (!firstError) {
-					firstError = `${scene.filename}: ${result.error}`;
+				const result = compileCached(scene.code, scene.filename);
+				if ("error" in result) {
+					if (!firstError) firstError = `${scene.filename}: ${result.error}`;
+				} else {
+					results.push(result);
 				}
 			}
 			if (results.length > 0) {
@@ -382,7 +417,6 @@ export function RemotionPreview({ scenes, compact, onError }: { scenes: Remotion
 			} else {
 				const errMsg = firstError || "No valid scenes";
 				setError(errMsg);
-				// Notify parent of compile error
 				if (onErrorRef.current) {
 					const fname = scenes[0]?.filename || "scene";
 					onErrorRef.current(fname, cleanError(errMsg));
