@@ -293,7 +293,7 @@ function IframePlayer({
 	);
 }
 
-interface RemotionScene {
+export interface RemotionScene {
 	filename: string;
 	code: string;
 }
@@ -318,7 +318,7 @@ interface CompiledScene {
 	code: string;
 }
 
-function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
+export function RemotionPreview({ scenes, compact }: { scenes: RemotionScene[]; compact?: boolean }) {
 	const [PlayerComp, setPlayerComp] = useState<typeof import("@remotion/player").Player | null>(null);
 	const playerRef = useRef<PlayerRef>(null);
 	const [currentIndex, setCurrentIndex] = useState(0);
@@ -628,13 +628,14 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	const fps = current.config.fps;
 
 	return (
-		<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px 24px" }} className="studio-surface">
+		<div style={{ ...(compact ? { display: "flex", flexDirection: "column" as const } : { ...fill, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", padding: "16px 24px" }) }} className={compact ? undefined : "studio-surface"}>
 			{/* Video area — click to play/pause */}
 			<div
 				style={{
-					position: "relative", cursor: "pointer", aspectRatio: "16/9", width: "100%", maxWidth: "min(100%, calc(80vh * 16 / 9))",
-					borderRadius: 8, overflow: "hidden", background: "#000",
-					boxShadow: "0 2px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(128,128,128,0.1)",
+					position: "relative", cursor: "pointer", aspectRatio: "16/9", width: "100%",
+					...(compact ? {} : { maxWidth: "min(100%, calc(80vh * 16 / 9))" }),
+					borderRadius: compact ? 0 : 8, overflow: "hidden", background: "#000",
+					...(compact ? {} : { boxShadow: "0 2px 20px rgba(0,0,0,0.25), 0 0 0 1px rgba(128,128,128,0.1)" }),
 				}}
 				onClick={togglePlay}
 			>
@@ -697,7 +698,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 			</div>
 
 			{/* Progress bar + time */}
-			<div style={{ width: "100%", maxWidth: "min(100%, calc(80vh * 16 / 9))", display: "flex", alignItems: "center", gap: 12, padding: "20px 0 8px" }}>
+			<div style={{ width: "100%", ...(compact ? {} : { maxWidth: "min(100%, calc(80vh * 16 / 9))" }), display: "flex", alignItems: "center", gap: compact ? 8 : 12, padding: compact ? "8px 8px 4px" : "20px 0 8px" }}>
 				<div
 					ref={barRef}
 					onClick={handleBarClick}
@@ -713,7 +714,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 							<div
 								key={scene.filename}
 								className="player-bar-segment"
-								style={{ flex: weight, height: 4, background: "var(--border)", borderRadius: 3, overflow: "hidden", transition: "height 0.15s" }}
+								style={{ flex: weight, height: compact ? 6 : 4, background: compact ? "rgba(0,0,0,0.1)" : "var(--border)", borderRadius: 3, overflow: "hidden", transition: "height 0.15s" }}
 							>
 								<div
 									ref={i === sceneIndex ? activeSegRef : undefined}

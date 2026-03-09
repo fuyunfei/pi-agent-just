@@ -169,14 +169,11 @@ export default function Home() {
     );
   }
 
-  // ── Consumer mode: full-screen preview + chat at bottom ──
+  // ── Consumer mode: chat-only (videos appear inline in chat) ──
   if (!DEV_MODE) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden" }}>
-        <div style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
-          <CodeStudio style={{ width: "100%", height: "100%", overflow: "hidden" }} />
-        </div>
-        <div style={{ flexShrink: 0, maxHeight: "40vh", overflow: "hidden" }}>
+      <div style={{ display: "flex", justifyContent: "center", height: "100dvh", overflow: "hidden" }}>
+        <div style={{ flex: 1, maxWidth: 1024, overflow: "hidden" }}>
           <ChatPanel />
         </div>
       </div>

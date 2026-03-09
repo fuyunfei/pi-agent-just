@@ -383,6 +383,16 @@ noscript pre {
   background: var(--muted-foreground);
 }
 
+/* Hide scrollbar completely */
+.scrollbar-hide,
+.scrollbar-hide [data-stick-to-bottom-scroll] {
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar,
+.scrollbar-hide [data-stick-to-bottom-scroll]::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes player-icon-fade {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.4); }

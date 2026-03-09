@@ -57,6 +57,8 @@ import {
 	TerminalIcon,
 	TrendingUpIcon,
 	XCircleIcon,
+	DownloadIcon,
+	MaximizeIcon,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -68,6 +70,13 @@ import { BrainIcon } from "lucide-react";
 import { SystemPromptButton } from "./SystemPromptEditor";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/app/lib/models";
 import { DEV_MODE } from "@/app/lib/feature-flags";
+import { ExportDialog } from "@/app/components/ExportDialog";
+import dynamic from "next/dynamic";
+
+const RemotionPreview = dynamic(
+	() => import("@/app/components/code-studio/LivePreview").then((m) => m.RemotionPreview),
+	{ ssr: false },
+);
 
 /* ------------------------------------------------------------------ */
 /*  Tool call — compact inline card (V0-style)                        */
@@ -339,6 +348,58 @@ const ImageToolCard = memo(function ImageToolCard({
 	);
 });
 
+/** Inline scene preview with click-to-expand lightbox + export dialog */
+function ScenePreviewCard({ scenes, label }: { scenes: { filename: string; code: string }[]; label: string }) {
+	const [expanded, setExpanded] = useState(false);
+	const [exportOpen, setExportOpen] = useState(false);
+
+	return (
+		<>
+			{expanded && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-zoom-out p-8"
+					onClick={() => setExpanded(false)}
+				>
+					<div
+						className="w-full max-w-4xl"
+						style={{ aspectRatio: "16/9" }}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<RemotionPreview scenes={scenes} />
+					</div>
+				</div>
+			)}
+			<ExportDialog open={exportOpen} onOpenChange={setExportOpen} scenes={scenes} />
+			<div className="my-1.5 max-w-md">
+				<div className="relative rounded-xl overflow-hidden border border-border/60 group">
+					<div className="cursor-zoom-in" onClick={() => setExpanded(true)}>
+						<RemotionPreview scenes={scenes} compact />
+					</div>
+					<button
+						type="button"
+						onClick={() => setExpanded(true)}
+						className="absolute top-2 right-2 size-7 flex items-center justify-center rounded-lg bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+					>
+						<MaximizeIcon className="size-3.5" />
+					</button>
+				</div>
+				<div className="flex items-center gap-1.5 mt-1 px-1">
+					<FilmIcon className="size-3 text-muted-foreground/50" />
+					<span className="text-[11px] text-muted-foreground/60 flex-1">{label}</span>
+					<button
+						type="button"
+						onClick={() => setExportOpen(true)}
+						className="text-[11px] text-muted-foreground/50 hover:text-foreground flex items-center gap-1 transition-colors"
+					>
+						<DownloadIcon className="size-3" />
+						<span>Export</span>
+					</button>
+				</div>
+			</div>
+		</>
+	);
+}
+
 /** Extract filename from tool args */
 function toolFilename(tool: ToolCall): string | null {
 	const path = String(tool.args.path || tool.args.file_path || "");
@@ -553,6 +614,41 @@ const AssistantMessage = memo(function AssistantMessage({
 									</div>,
 								);
 							}
+						} else if (!DEV_MODE && part.type === "tool" && isRemotionSceneTool(part.tool)) {
+							// Consumer mode: group consecutive scene tools into one preview
+							const sceneGroup: ToolCall[] = [];
+							while (i < msg.parts.length) {
+								const p = msg.parts[i];
+								if (p.type === "tool" && isRemotionSceneTool(p.tool)) {
+									sceneGroup.push(p.tool);
+									i++;
+								} else break;
+							}
+							const allCompleted = sceneGroup.every((t) => t.state === "completed");
+							const anyRunning = sceneGroup.some((t) => t.state === "running");
+							if (allCompleted) {
+								const scenes = sceneGroup.map((t) => ({
+									filename: String(t.args?.path || t.args?.file_path || "").split("/").pop() || "scene.tsx",
+									code: String(t.args?.content || ""),
+								})).filter((s) => s.code);
+								if (scenes.length > 0) {
+									const label = scenes.length === 1
+														? sceneLabel(scenes[0].filename)
+														: `${scenes.length} scenes`;
+									elements.push(
+										<ScenePreviewCard
+											key={`scene-group-${sceneGroup[0].id}`}
+											scenes={scenes}
+											label={label}
+										/>,
+									);
+								}
+							} else {
+								// Still running — show individual cards
+								for (const t of sceneGroup) {
+									elements.push(<ToolCallCard key={t.id} tool={t} />);
+								}
+							}
 						} else if (part.type === "tool") {
 							const _display = toolDisplayInfo(part.tool);
 							const isVisible = _display.isScene || _display.isSkill
@@ -710,13 +806,22 @@ function AttachmentPreviews() {
 /*  Auto-scroll when new messages arrive                               */
 /* ------------------------------------------------------------------ */
 
-function ScrollOnNewMessage({ count }: { count: number }) {
+function ScrollOnNewMessage({ count, lastRole }: { count: number; lastRole?: string }) {
 	const { scrollToBottom } = useStickToBottomContext();
 	const prev = useRef(count);
 	useEffect(() => {
-		if (count > prev.current) scrollToBottom();
+		if (count <= prev.current) { prev.current = count; return; }
 		prev.current = count;
-	}, [count, scrollToBottom]);
+		if (!DEV_MODE && lastRole === "user") {
+			// Consumer mode: scroll user message to top of viewport
+			requestAnimationFrame(() => {
+				const el = document.querySelector(`[data-msg-index="${count - 1}"]`);
+				el?.scrollIntoView({ behavior: "smooth", block: "start" });
+			});
+		} else {
+			scrollToBottom();
+		}
+	}, [count, lastRole, scrollToBottom]);
 	return null;
 }
 
@@ -1036,8 +1141,8 @@ export function ChatPanel() {
 
 	return (
 		<div className="flex flex-col h-full" style={{ background: "#FAFAF8" }}>
-			<Conversation className="flex-1 relative chat-scroll">
-				<ScrollOnNewMessage count={messages.length} />
+			<Conversation className={cn("flex-1 relative chat-scroll", !DEV_MODE && "scrollbar-hide")}>
+				<ScrollOnNewMessage count={messages.length} lastRole={messages[messages.length - 1]?.role} />
 				<ConversationContent className="gap-6 px-4 py-6">
 					{/* Empty state */}
 					{messages.length === 0 && (
@@ -1091,8 +1196,8 @@ export function ChatPanel() {
 						</div>
 					)}
 
-					{messages.map((msg) => (
-						<div key={msg.id}>
+					{messages.map((msg, idx) => (
+						<div key={msg.id} data-msg-index={idx}>
 							{msg.role === "system" ? (
 									<div className="flex justify-center px-10">
 										<pre className="text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-4 py-2 font-mono whitespace-pre-wrap max-w-full">
@@ -1129,7 +1234,7 @@ export function ChatPanel() {
 			</Conversation>
 
 			{/* Input area */}
-			<div className="relative p-3" style={{ borderTop: "1px solid #E8E7E3" }}>
+			<div className="relative p-3" style={DEV_MODE ? { borderTop: "1px solid #E8E7E3" } : undefined}>
 				<SlashCommandMenu
 					items={slashMenu.items}
 					heading={slashMenu.heading}
