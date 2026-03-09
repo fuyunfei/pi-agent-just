@@ -82,6 +82,29 @@ const RemotionPreview = dynamic(
 /*  Tool call — compact inline card (V0-style)                        */
 /* ------------------------------------------------------------------ */
 
+/** Insert `@SceneName ` into the chat textarea and focus it */
+function insertSceneReference(filename: string) {
+	const label = sceneLabel(filename);
+	const ref = `@${label} `;
+	const ta = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
+	if (!ta) return;
+	// Insert at cursor position (or append)
+	const start = ta.selectionStart ?? ta.value.length;
+	const end = ta.selectionEnd ?? ta.value.length;
+	const before = ta.value.slice(0, start);
+	const after = ta.value.slice(end);
+	// Add space before @ if needed
+	const needsSpace = before.length > 0 && !before.endsWith(" ") && !before.endsWith("\n");
+	const insert = (needsSpace ? " " : "") + ref;
+	// Use native setter to trigger React's onChange
+	const nativeSet = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+	nativeSet?.call(ta, before + insert + after);
+	ta.dispatchEvent(new Event("input", { bubbles: true }));
+	ta.focus();
+	const cursor = start + insert.length;
+	ta.setSelectionRange(cursor, cursor);
+}
+
 /** "scene-01-intro.tsx" → "Intro" */
 function sceneLabel(filename: string): string {
 	const base = filename.replace(/\.(tsx|jsx|ts|js)$/, "");
@@ -410,17 +433,27 @@ function SceneThumbnail({ scene, onClick }: {
 		);
 	}
 
+	const label = sceneLabel(scene.filename);
 	return (
-		<div
-			className="relative rounded-lg overflow-hidden border border-border/60 group cursor-pointer"
-			onClick={onClick}
-		>
-			<RemotionPreview scenes={[scene]} compact onError={handleError} />
+		<div className="flex flex-col gap-1">
+			<div
+				className="relative rounded-lg overflow-hidden border border-border/60 group cursor-pointer"
+				onClick={onClick}
+			>
+				<RemotionPreview scenes={[scene]} compact onError={handleError} />
+				<button
+					type="button"
+					className="absolute top-1.5 right-1.5 size-6 flex items-center justify-center rounded-md bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+				>
+					<MaximizeIcon className="size-3" />
+				</button>
+			</div>
 			<button
 				type="button"
-				className="absolute top-1.5 right-1.5 size-6 flex items-center justify-center rounded-md bg-black/40 text-white/80 hover:bg-black/60 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+				onClick={(e) => { e.stopPropagation(); insertSceneReference(scene.filename); }}
+				className="self-start text-[11px] text-muted-foreground hover:text-foreground transition-colors truncate max-w-full"
 			>
-				<MaximizeIcon className="size-3" />
+				@{label}
 			</button>
 		</div>
 	);
@@ -464,17 +497,23 @@ function SceneCell({ tool, index, onExpand }: { tool: ToolCall; index: number; o
 	// Completed edit tool → show "updated" card (no full code available)
 	if (tool.state === "completed" && isEdit) {
 		return (
-			<div
-				className="relative rounded-lg overflow-hidden border border-border/60"
-				style={{ aspectRatio: "16/9", background: "#1a1a2e" }}
-			>
-				<div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
-					<CheckCircle2Icon className="size-4 text-green-400/70" />
-					<span className="text-[11px] text-white/60">Updated</span>
+			<div className="flex flex-col gap-1">
+				<div
+					className="relative rounded-lg overflow-hidden border border-border/60"
+					style={{ aspectRatio: "16/9", background: "#1a1a2e" }}
+				>
+					<div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+						<CheckCircle2Icon className="size-4 text-green-400/70" />
+						<span className="text-[11px] text-white/60">Updated</span>
+					</div>
 				</div>
-				<div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-4">
-					<span className="text-[10px] text-white/60 truncate block">{sceneLabel(filename)}</span>
-				</div>
+				<button
+					type="button"
+					onClick={() => insertSceneReference(filename)}
+					className="self-start text-[11px] text-muted-foreground hover:text-foreground transition-colors truncate max-w-full"
+				>
+					@{sceneLabel(filename)}
+				</button>
 			</div>
 		);
 	}
