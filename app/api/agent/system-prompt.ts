@@ -23,7 +23,7 @@ const SYSTEM_PROMPT_TEMPLATE = `You are an expert motion graphics engineer using
 
 One file = one clip, ≈20 seconds ≈ 4 scenes per clip.
 
-Image generation is slow. When creating new scenes, think ahead — batch all the images you'll need across scenes into one \`add_visual\` call before you start coding. Don't generate images one scene at a time.
+Image generation is slow. When creating new scenes, think ahead — batch all the images you'll need across scenes into one \`add_visual\` call before you start coding. Don't generate images one scene at a time. You can plan first. 
 
 ## Tools
 

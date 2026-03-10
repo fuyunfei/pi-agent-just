@@ -329,7 +329,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 
 	// Compiled scenes
 	const [compiled, setCompiled] = useState<CompiledScene[]>([]);
-	const [error, setError] = useState<string | null>(null);
+	const [sceneErrors, setSceneErrors] = useState<Map<string, string>>(new Map());
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 	const keyRef = useRef(0);
 	const [playerKey, setPlayerKey] = useState(0);
@@ -362,7 +362,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		clearTimeout(debounceRef.current);
 		debounceRef.current = setTimeout(() => {
 			const results: CompiledScene[] = [];
-			let firstError: string | null = null;
+			const errors = new Map<string, string>();
 			for (const scene of scenes) {
 				const result = compileRemotionCode(scene.code);
 				if (result.Component) {
@@ -372,16 +372,14 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 						filename: scene.filename,
 						code: scene.code,
 					});
-				} else if (!firstError) {
-					firstError = `${scene.filename}: ${result.error}`;
+				} else {
+					errors.set(scene.filename, result.error || "Compilation failed");
 				}
 			}
 			if (results.length > 0) {
 				setCompiled(results);
-				setError(firstError);
-			} else {
-				setError(firstError || "No valid scenes");
 			}
+			setSceneErrors(errors);
 		}, 600);
 		return () => clearTimeout(debounceRef.current);
 	}, [scenesKey]);
@@ -542,8 +540,8 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	// Runtime error — tracked via state so we can render fix button in parent DOM
 	const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
-	// Reset runtime error when code changes (recompile)
-	useEffect(() => { setRuntimeError(null); }, [compiled]);
+	// Reset runtime error when code changes or scene switches
+	useEffect(() => { setRuntimeError(null); }, [compiled, sceneIndex]);
 
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
 		({ error: err }: { error: Error }) => {
@@ -593,14 +591,25 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		}
 	}, [compiled, sceneIndex, sceneOffsets.totalFrames, switchScene]);
 
-	// Compile error fix dispatch (runtime errors handled inside errorFallback)
+	// Current scene's compile error (null if current scene compiled OK)
+	const currentError = current ? null : (() => {
+		// Current scene compiled OK → no error. If not in compiled[], find its error.
+		const fn = scenes[sceneIndex]?.filename;
+		return fn ? sceneErrors.get(fn) ?? null : null;
+	})();
+	// Any scene has errors (for the "all failed" empty state)
+	const anyError = sceneErrors.size > 0 ? `${sceneErrors.entries().next().value?.[0]}: ${sceneErrors.entries().next().value?.[1]}` : null;
+
+	// Compile error fix dispatch
 	const sendFix = useCallback(() => {
-		if (!error) return;
-		const filename = current?.filename || scenes[0]?.filename || "scene";
+		// Pick the error to fix: current scene's error, or first error from the map
+		const fn = current?.filename || scenes[sceneIndex]?.filename || scenes[0]?.filename || "scene";
+		const err = sceneErrors.get(fn) || (sceneErrors.size > 0 ? `${sceneErrors.entries().next().value?.[0]}: ${sceneErrors.entries().next().value?.[1]}` : null);
+		if (!err) return;
 		window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-			detail: { filename, error: cleanError(error), type: "compile" },
+			detail: { filename: fn, error: cleanError(err), type: "compile" },
 		}));
-	}, [error, current?.filename, scenes]);
+	}, [sceneErrors, current?.filename, scenes, sceneIndex]);
 
 	if (!PlayerComp) {
 		return (
@@ -610,7 +619,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 		);
 	}
 
-	if (compiled.length === 0 && error) {
+	if (compiled.length === 0 && anyError) {
 		return (
 			<div style={{ ...fill, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 32 }} className="studio-surface">
 				<button
@@ -645,23 +654,8 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				}}
 				onClick={togglePlay}
 			>
-				{/* Compile error overlay */}
-				{error && (
-					<div
-						onClick={(e) => e.stopPropagation()}
-						style={{
-							position: "absolute", inset: 0, zIndex: 20,
-							display: "flex", alignItems: "center", justifyContent: "center",
-							background: "rgba(10,10,30,0.7)", backdropFilter: "blur(4px)",
-						}}
-					>
-						<button type="button" onClick={sendFix} className="fix-btn">
-							Ask AI to fix
-						</button>
-					</div>
-				)}
 				{/* Runtime error overlay — rendered in parent DOM so it's clickable (iframe has pointerEvents:none) */}
-				{!error && runtimeError && (
+				{runtimeError && (
 					<div
 						onClick={(e) => e.stopPropagation()}
 						style={{
