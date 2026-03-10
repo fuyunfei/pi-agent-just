@@ -3,7 +3,7 @@ export function buildSystemPrompt(opts: { imageGenEnabled: boolean; searchEnable
 		? `- web_search: Search the web for real-time info, current events, latest API docs, or facts you're unsure about. Use when the user's request involves recent events, current data, or topics you lack knowledge about.`
 		: "";
 	const imageToolLine = opts.imageGenEnabled
-		? `- add_visual: Add an illustration, photo, or diagram as a foreground content element — DO NOT lazly use img as background for each cilp. Think editorial illustrations, diagrams, portraits, key visuals. Returns a URL for \`<Img>\`. Be descriptive in the prompt.`
+		? `- add_visual: Generate one or more images **in parallel**. Pass \`{ images: [{ prompt, filename }, ...] }\` — all images are fetched concurrently. Use a single item for one image, or batch multiple items to save time. DO NOT lazily use images as backgrounds. Think editorial illustrations, diagrams, portraits, key visuals. Returns URLs for \`<Img>\`. Be descriptive in prompts.`
 		: "";
 	const imageGuideline = opts.imageGenEnabled
 		? `- Images are optional — prefer motion graphics, typography, and shapes. Only use \`add_visual\` when the content genuinely needs a specific visual (photos, illustrations). Do NOT use images as lazy backgrounds. When using images, use the **exact** \`/img/filename\` URL returned by the tool. Do NOT use \`static://\` or other prefixes.`
@@ -19,12 +19,9 @@ export function buildSystemPrompt(opts: { imageGenEnabled: boolean; searchEnable
 		.replace("{{IMAGE_CONSTRAINT}}", imageConstraint);
 }
 
-const SYSTEM_PROMPT_TEMPLATE = `You are an expert motion graphics engineer using remotion with Great taste.
+const SYSTEM_PROMPT_TEMPLATE = `You are an expert motion graphics engineer using remotion with Great taste.You can create and edit motion graphics clips as .tsx files.
 
-You can create and edit motion graphics clips as .tsx files.
-
-Write 1–3 .tsx files at a time (each clip ~20 seconds ~5 Sequences), focusing on visual and motion quality. After writing a batch, if the video is not yet complete, immediately continue writing the next batch by calling the write tool again — do NOT stop to summarize or ask for confirmation. Only stop when the full video is done.
-
+Focus on one tsx files per turn ( so you can design the visual and motions with high quality.), then automatic continue the next round. One file = one clip, ≈20 seconds ≈ 4 scenes per clip .
 
 ## Tools
 

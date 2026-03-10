@@ -215,7 +215,14 @@ function toolDisplayInfo(tool: ToolCall): ToolDisplay {
 	}
 
 	if (name === "add_visual") {
-		const prompt = String(args.prompt || "");
+		const images = Array.isArray(args.images) ? args.images as { prompt: string; filename: string }[] : [];
+		if (images.length > 1) {
+			return {
+				icon: <ImageIcon className="size-3.5" />,
+				label: `Generating ${images.length} images…`,
+			};
+		}
+		const prompt = images[0]?.prompt || String(args.prompt || "");
 		const short = prompt.length > 50 ? `${prompt.slice(0, 47)}...` : prompt;
 		return {
 			icon: <ImageIcon className="size-3.5" />,
@@ -256,58 +263,86 @@ const ImageToolCard = memo(function ImageToolCard({
 	display: ToolDisplay;
 	compact: boolean;
 }) {
-	const [lightbox, setLightbox] = useState(false);
+	const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 	const isRunning = tool.state === "running";
 	const isError = tool.state === "error";
-	const imageUrl = tool.details?.imageUrl as string | undefined;
-	const hasImage = imageUrl && !isRunning && !isError;
-	const prompt = String(tool.args.prompt || "");
+
+	// Support both batch (imageUrls) and legacy single (imageUrl)
+	const imageUrls = (tool.details?.imageUrls as string[] | undefined)
+		?? (tool.details?.imageUrl ? [tool.details.imageUrl as string] : []);
+	const hasImages = imageUrls.length > 0 && !isRunning && !isError;
+
+	// Extract prompts from batch args, fall back to legacy single prompt
+	const images = Array.isArray(tool.args.images) ? tool.args.images as { prompt: string; filename: string }[] : [];
+	const prompts = images.length > 0
+		? images.map((img) => img.prompt)
+		: [String(tool.args.prompt || "")];
+	const summaryPrompt = prompts.length > 1 ? `${prompts.length} images` : prompts[0];
+	const skeletonCount = Math.max(images.length, 1);
 
 	// Shimmer skeleton for loading state
-	const skeleton = (className: string) => (
+	const skeleton = (className: string, label?: string) => (
 		<div className={cn("relative overflow-hidden bg-muted/40 border border-border/40 rounded-lg", className)}>
 			<div className="absolute inset-0 bg-gradient-to-r from-transparent via-foreground/[0.03] to-transparent animate-[shimmer_2s_infinite]" />
 			<div className="flex flex-col items-center justify-center gap-2 h-full">
 				<ImageIcon className="size-4 text-muted-foreground/40" />
-				<span className="text-[10px] text-muted-foreground/40">{compact ? "Generating..." : prompt.length > 40 ? `${prompt.slice(0, 37)}...` : prompt}</span>
+				<span className="text-[10px] text-muted-foreground/40">{label || "Generating..."}</span>
 			</div>
 		</div>
 	);
 
-	const lightboxOverlay = lightbox && hasImage ? (
+	const lightboxOverlay = lightboxIdx != null && hasImages && imageUrls[lightboxIdx] ? (
 		<div
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-zoom-out"
-			onClick={() => setLightbox(false)}
+			onClick={() => setLightboxIdx(null)}
 		>
 			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img src={imageUrl} alt={prompt} className="max-w-[90vw] max-h-[90vh] object-contain" />
+			<img src={imageUrls[lightboxIdx]} alt={prompts[lightboxIdx] || ""} className="max-w-[90vw] max-h-[90vh] object-contain" />
 		</div>
 	) : null;
 
 	if (compact) {
-		if (isRunning) return skeleton("aspect-[4/3]");
+		if (isRunning) {
+			return skeletonCount > 1 ? (
+				<>{Array.from({ length: skeletonCount }, (_, i) => <div key={i}>{skeleton("aspect-[4/3]")}</div>)}</>
+			) : skeleton("aspect-[4/3]");
+		}
 		if (isError) return (
 			<div className="aspect-[4/3] rounded-lg border border-red-500/20 bg-red-500/5 flex items-center justify-center">
 				<XCircleIcon className="size-4 text-red-500/60" />
 			</div>
 		);
-		if (!hasImage) return null;
+		if (!hasImages) return null;
 		return (
 			<>
 				{lightboxOverlay}
-				<div className="relative rounded-lg overflow-hidden border border-border/40 aspect-[4/3] group cursor-zoom-in" onClick={() => setLightbox(true)}>
-					{/* eslint-disable-next-line @next/next/no-img-element */}
-					<img src={imageUrl} alt={prompt} className="w-full h-full object-cover" />
-					<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
-						<span className="text-[10px] text-white/90 line-clamp-2 leading-tight">{prompt}</span>
+				{imageUrls.map((url, i) => (
+					<div key={i} className="relative rounded-lg overflow-hidden border border-border/40 aspect-[4/3] group cursor-zoom-in" onClick={() => setLightboxIdx(i)}>
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img src={url} alt={prompts[i] || ""} className="w-full h-full object-cover" />
+						<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-1.5 pt-5 opacity-0 group-hover:opacity-100 transition-opacity">
+							<span className="text-[10px] text-white/90 line-clamp-2 leading-tight">{prompts[i] || ""}</span>
+						</div>
 					</div>
-				</div>
+				))}
 			</>
 		);
 	}
 
 	// Standalone states
-	if (isRunning) return <div className="my-1.5">{skeleton("h-28")}</div>;
+	if (isRunning) {
+		return (
+			<div className="my-1.5">
+				{skeletonCount > 1 ? (
+					<div className="grid grid-cols-2 gap-2">
+						{Array.from({ length: skeletonCount }, (_, i) => (
+							<div key={i}>{skeleton("aspect-[4/3]", prompts[i]?.slice(0, 30) || "Generating...")}</div>
+						))}
+					</div>
+				) : skeleton("h-28", summaryPrompt.length > 40 ? `${summaryPrompt.slice(0, 37)}...` : summaryPrompt)}
+			</div>
+		);
+	}
 	if (isError) return (
 		<div className="my-1.5">
 			<div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs">
@@ -317,23 +352,33 @@ const ImageToolCard = memo(function ImageToolCard({
 			</div>
 		</div>
 	);
-	if (!hasImage) return null;
+	if (!hasImages) return null;
 
-	// Loaded — image is the hero, prompt on hover, click to enlarge
+	// Loaded — single or grid
 	return (
 		<>
 			{lightboxOverlay}
-			<div className="my-1.5 group relative rounded-xl overflow-hidden border border-border/40 max-w-xs cursor-zoom-in" onClick={() => setLightbox(true)}>
-				{/* eslint-disable-next-line @next/next/no-img-element */}
-				<img
-					src={imageUrl}
-					alt={prompt}
-					className="w-full max-h-44 object-contain bg-black/5 dark:bg-white/5"
-				/>
-				<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
-					<span className="text-[11px] text-white/90 line-clamp-2 leading-snug">{prompt}</span>
+			{imageUrls.length === 1 ? (
+				<div className="my-1.5 group relative rounded-xl overflow-hidden border border-border/40 max-w-xs cursor-zoom-in" onClick={() => setLightboxIdx(0)}>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={imageUrls[0]} alt={prompts[0]} className="w-full max-h-44 object-contain bg-black/5 dark:bg-white/5" />
+					<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
+						<span className="text-[11px] text-white/90 line-clamp-2 leading-snug">{prompts[0]}</span>
+					</div>
 				</div>
-			</div>
+			) : (
+				<div className="my-1.5 grid grid-cols-2 gap-2">
+					{imageUrls.map((url, i) => (
+						<div key={i} className="group relative rounded-xl overflow-hidden border border-border/40 cursor-zoom-in" onClick={() => setLightboxIdx(i)}>
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img src={url} alt={prompts[i] || ""} className="w-full aspect-[4/3] object-cover bg-black/5 dark:bg-white/5" />
+							<div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity">
+								<span className="text-[10px] text-white/90 line-clamp-2 leading-snug">{prompts[i] || ""}</span>
+							</div>
+						</div>
+					))}
+				</div>
+			)}
 		</>
 	);
 });
@@ -374,8 +419,8 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 			<div className="my-1.5">
 				<button
 					type="button"
-					onClick={handleClick}
-					disabled={!canOpen}
+					onClick={isError ? handleRetry : handleClick}
+					disabled={!canOpen && !isError}
 					className={cn(
 						"flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs text-left transition-colors",
 						isRunning
@@ -420,7 +465,7 @@ const ToolCallCard = memo(function ToolCallCard({ tool }: { tool: ToolCall }) {
 						</div>
 					</div>
 					{isError && (
-						<span onClick={handleRetry} className="flex size-6 items-center justify-center rounded-md hover:bg-red-500/10 text-red-500/60 hover:text-red-500 flex-shrink-0 transition-colors" title="Ask AI to fix">
+						<span className="flex size-6 items-center justify-center rounded-md text-red-500/60 flex-shrink-0" title="Ask AI to fix">
 							<RotateCcwIcon className="size-3.5" />
 						</span>
 					)}

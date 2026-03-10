@@ -539,22 +539,29 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 	const currentFilenameRef = useRef<string | undefined>(current?.filename);
 	currentFilenameRef.current = current?.filename;
 
+	// Runtime error — tracked via state so we can render fix button in parent DOM
+	const [runtimeError, setRuntimeError] = useState<string | null>(null);
+
+	// Reset runtime error when code changes (recompile)
+	useEffect(() => { setRuntimeError(null); }, [compiled]);
+
 	const errorFallback: import("@remotion/player").ErrorFallback = useCallback(
-		({ error: err }: { error: Error }) => (
-			<div style={{ ...fill, background: "#1a1a2e", display: "flex", alignItems: "center", justifyContent: "center" }}>
-				<button type="button" onClick={() => {
-					window.dispatchEvent(new CustomEvent("studio:retry-scene", {
-						detail: { filename: currentFilenameRef.current || "scene", error: err.message.split("\n")[0].slice(0, 200), type: "runtime" },
-					}));
-				}} style={{
-					padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
-					background: "rgba(99,102,241,0.15)", color: "#818cf8",
-					border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
-				}}>Ask AI to fix</button>
-			</div>
-		),
+		({ error: err }: { error: Error }) => {
+			// Notify parent via deferred setState (can't setState during render)
+			setTimeout(() => setRuntimeError(err.message.split("\n")[0].slice(0, 200)), 0);
+			return (
+				<div style={{ ...fill, background: "#1a1a2e" }} />
+			);
+		},
 		[],
 	);
+
+	const sendRuntimeFix = useCallback(() => {
+		if (!runtimeError) return;
+		window.dispatchEvent(new CustomEvent("studio:retry-scene", {
+			detail: { filename: currentFilenameRef.current || "scene", error: runtimeError, type: "runtime" },
+		}));
+	}, [runtimeError]);
 
 	// Click on progress bar to seek — calculate which segment and position
 	const barRef = useRef<HTMLDivElement>(null);
@@ -638,7 +645,7 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 				}}
 				onClick={togglePlay}
 			>
-				{/* Compile error overlay (runtime errors handled inside Player's errorFallback) */}
+				{/* Compile error overlay */}
 				{error && (
 					<div
 						onClick={(e) => e.stopPropagation()}
@@ -648,15 +655,22 @@ function RemotionPreview({ scenes }: { scenes: RemotionScene[] }) {
 							background: "rgba(10,10,30,0.7)", backdropFilter: "blur(4px)",
 						}}
 					>
-						<button
-							type="button"
-							onClick={sendFix}
-							style={{
-								padding: "6px 16px", fontSize: 12, fontFamily: "Inter, system-ui",
-								background: "rgba(99,102,241,0.15)", color: "#818cf8",
-								border: "1px solid rgba(99,102,241,0.3)", borderRadius: 6, cursor: "pointer",
-							}}
-						>
+						<button type="button" onClick={sendFix} className="fix-btn">
+							Ask AI to fix
+						</button>
+					</div>
+				)}
+				{/* Runtime error overlay — rendered in parent DOM so it's clickable (iframe has pointerEvents:none) */}
+				{!error && runtimeError && (
+					<div
+						onClick={(e) => e.stopPropagation()}
+						style={{
+							position: "absolute", inset: 0, zIndex: 20,
+							display: "flex", alignItems: "center", justifyContent: "center",
+							background: "rgba(10,10,30,0.7)", backdropFilter: "blur(4px)",
+						}}
+					>
+						<button type="button" onClick={sendRuntimeFix} className="fix-btn">
 							Ask AI to fix
 						</button>
 					</div>

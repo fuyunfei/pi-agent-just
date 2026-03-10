@@ -340,56 +340,82 @@ export const IMAGE_MODELS = [
 ];
 
 function createImageGenTool(apiKey: string, overlayFs: OverlayFs, mountPoint: string, imageState: { enabled: boolean; model: string }) {
+	/** Generate a single image, returning {url, filename} or {error, filename}. */
+	async function generateOne(
+		prompt: string,
+		filename: string,
+		signal?: AbortSignal,
+	): Promise<{ ok: true; filename: string; url: string; size: number } | { ok: false; filename: string; error: string }> {
+		const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+			method: "POST",
+			signal,
+			headers: {
+				"Authorization": `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				model: imageState.model,
+				messages: [{ role: "user", content: prompt }],
+				modalities: ["image"],
+			}),
+		});
+		if (!res.ok) {
+			const err = await res.text();
+			return { ok: false, filename, error: err };
+		}
+		const data = await res.json();
+		const imgUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url as string | undefined;
+		if (!imgUrl?.startsWith("data:image/")) {
+			return { ok: false, filename, error: "No image in response" };
+		}
+		const [, b64] = imgUrl.split(",");
+		const buf = Buffer.from(b64, "base64");
+		const name = filename.replace(/^\/+/, "").split("/").pop()!;
+		const imgDir = join(mountPoint, "img");
+		await overlayFs.mkdir(imgDir, { recursive: true });
+		await overlayFs.writeFile(join(imgDir, name), new Uint8Array(buf));
+		const url = `/img/${name}`;
+		console.log(`[image] generated ${name} size=${(buf.length / 1024).toFixed(0)}KB`);
+		return { ok: true, filename: name, url, size: buf.length };
+	}
+
 	return {
 		name: "add_visual",
 		label: "Add Visual",
-		description: "Create an illustration, photo, or diagram as a visual element. Returns a URL for <Img src={url}>.",
+		description: "Generate one or more images in parallel. Pass an array of {prompt, filename} items — all images are fetched concurrently for maximum speed. Returns URLs for <Img src={url}>.",
 		parameters: Type.Object({
-			prompt: Type.String({ description: "Describe the image to generate" }),
-			filename: Type.String({ description: "Filename for the image, e.g. 'hero.png'" }),
+			images: Type.Array(
+				Type.Object({
+					prompt: Type.String({ description: "Describe the image to generate" }),
+					filename: Type.String({ description: "Filename for the image, e.g. 'hero.png'" }),
+				}),
+				{ description: "List of images to generate in parallel. Use a single item for one image, or multiple items to batch.", minItems: 1 },
+			),
 		}),
 		async execute(
 			_toolCallId: string,
-			params: { prompt: string; filename: string },
+			params: { images: { prompt: string; filename: string }[] },
 			signal?: AbortSignal,
-		): Promise<AgentToolResult<{ imageUrl?: string }>> {
+		): Promise<AgentToolResult<{ imageUrl?: string; imageUrls?: string[] }>> {
 			if (!imageState.enabled) {
 				return { content: [{ type: "text", text: "Image generation is currently disabled." }], details: {} };
 			}
-			const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-				method: "POST",
-				signal,
-				headers: {
-					"Authorization": `Bearer ${apiKey}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					model: imageState.model,
-					messages: [{ role: "user", content: params.prompt }],
-					modalities: ["image"],
-				}),
-			});
-			if (!res.ok) {
-				const err = await res.text();
-				return { content: [{ type: "text", text: `Image generation failed: ${err}` }], details: {} };
+			const results = await Promise.all(
+				params.images.map((img) => generateOne(img.prompt, img.filename, signal)),
+			);
+			const lines: string[] = [];
+			const urls: string[] = [];
+			for (const r of results) {
+				if (r.ok) {
+					lines.push(`Image saved: /img/${r.filename} (${(r.size / 1024).toFixed(0)}KB). Use: <Img src="/img/${r.filename}" />`);
+					urls.push(r.url);
+				} else {
+					lines.push(`Failed to generate ${r.filename}: ${r.error}`);
+				}
 			}
-			const data = await res.json();
-			const imgUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url as string | undefined;
-			if (!imgUrl?.startsWith("data:image/")) {
-				return { content: [{ type: "text", text: "No image in response" }], details: {} };
-			}
-			// Parse data URI and write to OverlayFs under img/
-			const [, b64] = imgUrl.split(",");
-			const buf = Buffer.from(b64, "base64");
-			const name = params.filename.replace(/^\/+/, "").split("/").pop()!;
-			const imgDir = join(mountPoint, "img");
-			await overlayFs.mkdir(imgDir, { recursive: true });
-			await overlayFs.writeFile(join(imgDir, name), new Uint8Array(buf));
-			const url = `/img/${name}`;
-			console.log(`[image] generated ${name} size=${(buf.length / 1024).toFixed(0)}KB`);
 			return {
-				content: [{ type: "text", text: `Image saved. Use: <Img src="/img/${name}" />` }],
-				details: { imageUrl: url },
+				content: [{ type: "text", text: lines.join("\n") }],
+				details: { imageUrl: urls[0], imageUrls: urls },
 			};
 		},
 	};
